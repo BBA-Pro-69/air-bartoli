@@ -1,0 +1,68 @@
+feat: front complet d'Air Bartoli, saisie en deux appuis
+
+----------------------------------------------------------------------
+Perimetre
+----------------------------------------------------------------------
+Six pages statiques, une feuille de style, neuf modules ES. Aucun build,
+aucune dependance npm, un seul import CDN : supabase-js. Les fichiers du
+depot sont exactement ceux servis au navigateur.
+
+login.html      deux boutons aux prenoms, puis le mot de passe
+index.html      la saisie : enfant, moment, tuile. Deux appuis
+enfant.html     solde, niveau, catalogue, comptes a rebours
+historique.html journal, annulation, reparation
+dashboard.html  ou se gagnent et ou se perdent les points
+reglages.html   enfants, categories, bareme, catalogue, jours speciaux
+
+----------------------------------------------------------------------
+Connexion par prenom
+----------------------------------------------------------------------
+Les applications du compte partagent l'origine fluxym-bba.github.io et
+Chrome melange les mots de passe. Les deux adresses Gmail ayant des
+prefixes dissemblables, le recollage de domaine habituel ne s'applique
+pas : l'ecran propose deux boutons portant les prenoms et resout
+l'adresse cote client. Il ne reste que le mot de passe a saisir.
+
+----------------------------------------------------------------------
+Saisie : pas de bouton valider
+----------------------------------------------------------------------
+L'appui sur une tuile ecrit immediatement via add_event, et un bandeau
+laisse dix secondes pour contrepasser. Au-dela, l'annulation reste
+possible depuis l'historique mais devient une ecriture visible : passe
+dix secondes ce n'est plus une faute de frappe, c'est un changement
+d'avis, et un changement d'avis se montre.
+
+Le moment de la journee est preselectionne d'apres l'heure de Paris. La
+date est modifiable vers le passe uniquement.
+
+----------------------------------------------------------------------
+Ecran enfant
+----------------------------------------------------------------------
+Solde en 3,2 rem, niveau et distance au niveau suivant, puis le
+catalogue. Sous chaque recompense : "il te manque 40 points, dans 12
+jours", calcule par v_reward_eligibility sur le rythme des 28 derniers
+jours. Aucun classement entre les deux freres nulle part.
+
+Les sorties collectives affichent la cagnotte ET le compte de chacun
+face au minimum. La repartition proposee est proportionnelle aux soldes,
+plancher au minimum par enfant, ajustable avant envoi.
+
+----------------------------------------------------------------------
+Reglages
+----------------------------------------------------------------------
+Le formulaire de recompense affiche en direct l'attente induite par le
+prix, a 22 points par semaine, et alerte en rouge au-dela de seize
+semaines. Les categories systeme sont signalees comme non renommables.
+
+----------------------------------------------------------------------
+Detail corrige avant livraison
+----------------------------------------------------------------------
+Le refus d'une demande d'echange passait par un upsert, qui exige toutes
+les colonnes NOT NULL meme quand la ligne existe. Ajout d'un helper
+update() distinct de save().
+
+----------------------------------------------------------------------
+Verification
+----------------------------------------------------------------------
+Les quatorze lectures du front rejouees en base sous l'identite reelle
+de Bruno : toutes passent la RLS et renvoient le bon perimetre.
