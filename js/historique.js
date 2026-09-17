@@ -3,15 +3,15 @@
 //  C'est la page qui rend le systeme incontestable devant un enfant.
 // =====================================================================
 import * as api from './api.js';
-import { mountNav } from './nav.js';
-import { $, el, pts, toast, fail, modal } from './ui.js';
+import { el, pts, toast, fail, modal } from './ui.js';
 
+let root = null;
 let events = [], cats = [], children = [], filtre = null;
 
 const cat = id => cats.find(c => c.id === id) || {};
 
 function render() {
-  const app = $('#app'); app.innerHTML = '';
+  const app = root; app.innerHTML = '';
   app.append(
     el('h1', {}, 'Historique'),
     el('p', { class: 'muted' },
@@ -85,10 +85,16 @@ async function reload() {
   render();
 }
 
-(async function main() {
-  if (!await mountNav()) return;
+export async function mount(container) {
+  root = container;
+  root.innerHTML = '<p class="muted">Chargement…</p>';
   try {
     [events, cats, children] = await Promise.all([api.getEvents(200), api.getCategories(), api.getChildren()]);
     render();
   } catch (e) { fail(e); }
-})();
+}
+
+export async function refreshView() {
+  if (!root) return;
+  try { await reload(); } catch (e) { fail(e); }
+}

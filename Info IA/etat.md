@@ -35,6 +35,8 @@ Le projet `quiz-famille` de la même organisation **n'a pas été touché**.
 | Front : `login`, `index`, `enfant`, `historique`, `dashboard`, `reglages` | écrit |
 | `css/app.css`, modules `api/ui/nav/login/saisie/enfant/historique/dashboard/reglages` | écrits |
 | Lectures du front rejouées sous l'identité réelle de Bruno | 14 requêtes, toutes passent la RLS |
+| Cinématiques de points, PWA, navigation mobile et cinématiques | écrites et validées statiquement |
+| Manifest, service worker et 4 icônes | écrits, version `2026-09-17c` |
 | Comptes Névine et Bruno créés et confirmés | fait |
 | Rattachement `parents` (`99-parents-bootstrap.sql`) | fait, session réelle vérifiée |
 
@@ -51,9 +53,12 @@ famille, 2 enfants, 35 catégories, 10 récompenses et 2 soldes visibles, tous
 
 ### Ce qui reste à faire
 
-1. **Dates de naissance** des enfants, pour que `min_age` serve à quelque
+1. **Déployer le contenu du dépôt sur GitHub Pages.** Le service worker et
+   l'installation PWA ne fonctionnent pas depuis `file://`, il faut une URL
+   HTTPS, typiquement GitHub Pages.
+2. **Dates de naissance** des enfants, pour que `min_age` serve à quelque
    chose : `update children set birth_date = '...' where first_name = '...';`
-2. **Publication** GitHub Pages : `Settings` → `Pages` → `main` / `(root)`.
+3. **Publication** GitHub Pages : `Settings` → `Pages` → `main` / `(root)`.
 
 ### Base vide, volontairement
 

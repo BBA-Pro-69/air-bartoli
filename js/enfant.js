@@ -4,9 +4,9 @@
 //  recompense, et AUCUNE comparaison entre les deux freres.
 // =====================================================================
 import * as api from './api.js';
-import { mountNav } from './nav.js';
-import { $, el, pts, toast, fail, modal, gauge } from './ui.js';
+import { el, pts, toast, fail, modal, gauge } from './ui.js';
 
+let root = null;
 let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], current = null;
 
 const bal   = id => (balances.find(b => b.child_id === id) || {}).balance ?? 0;
@@ -32,7 +32,7 @@ function etaText(days) {
 
 function render() {
   const c = kid(current), lv = level(current), b = bal(current);
-  const app = $('#app'); app.innerHTML = '';
+  const app = root; app.innerHTML = '';
 
   app.append(el('div', { class: 'chips', style: 'margin-bottom:14px' },
     ...children.map(k => el('button', {
@@ -152,7 +152,13 @@ async function ask(r, shares) {
   } catch (e) { fail(e); }
 }
 
-(async function main() {
-  if (!await mountNav()) return;
+export async function mount(container) {
+  root = container;
+  root.innerHTML = '<p class="muted">Chargement…</p>';
   try { await load(); render(); } catch (e) { fail(e); }
-})();
+}
+
+export async function refreshView() {
+  if (!root) return;
+  try { await load(); render(); } catch (e) { fail(e); }
+}

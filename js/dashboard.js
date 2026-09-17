@@ -5,9 +5,9 @@
 //  "tu n'ecoutes jamais".
 // =====================================================================
 import * as api from './api.js';
-import { mountNav } from './nav.js';
-import { $, el, pts, fail, divergingBars, lineChart } from './ui.js';
+import { el, pts, fail, divergingBars, lineChart } from './ui.js';
 
+let root = null;
 let children = [], profile = [], daily = [], levels = [], rates = [];
 let jours = 56, enfant = null;
 
@@ -30,7 +30,7 @@ function agrege(list, cle) {
 }
 
 function render() {
-  const app = $('#app'); app.innerHTML = '';
+  const app = root; app.innerHTML = '';
   app.append(
     el('h1', {}, 'Analyse'),
     el('div', { class: 'row', style: 'margin-bottom:14px' },
@@ -122,10 +122,19 @@ async function reload() {
   render();
 }
 
-(async function main() {
-  if (!await mountNav()) return;
+export async function mount(container) {
+  root = container;
+  root.innerHTML = '<p class="muted">Chargement…</p>';
   try {
     [children, levels, rates] = await Promise.all([api.getChildren(), api.getLevels(), api.getRates()]);
     await reload();
   } catch (e) { fail(e); }
-})();
+}
+
+export async function refreshView() {
+  if (!root) return;
+  try {
+    [children, levels, rates] = await Promise.all([api.getChildren(), api.getLevels(), api.getRates()]);
+    await reload();
+  } catch (e) { fail(e); }
+}

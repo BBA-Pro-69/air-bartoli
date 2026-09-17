@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Air Bartoli · Keyrilès",
+  "short_name": "Keyrilès",
+  "description": "Le programme de miles familial de Keyran et Rilès.",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait",
+  "background_color": "#f6f8fb",
+  "theme_color": "#0B2046",
+  "categories": ["lifestyle", "family", "productivity"],
+  "icons": [
+    {"src":"./assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"./assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"./assets/icon-maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"},
+    {"src":"./assets/apple-touch-icon-180.png","sizes":"180x180","type":"image/png","purpose":"any"}
+  ],
+  "shortcuts": [
+    {"name":"Donner des points","short_name":"Saisie","url":"./index.html","icons":[{"src":"./assets/icon-192.png","sizes":"192x192"}]},
+    {"name":"Voir les enfants","short_name":"Enfants","url":"./enfant.html","icons":[{"src":"./assets/icon-192.png","sizes":"192x192"}]},
+    {"name":"Voir l’analyse","short_name":"Analyse","url":"./dashboard.html","icons":[{"src":"./assets/icon-192.png","sizes":"192x192"}]}
+  ]
+}

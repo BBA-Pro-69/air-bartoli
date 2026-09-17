@@ -1,5 +1,9 @@
 import { PARENTS, signIn, sb } from './api.js';
 import { $, el } from './ui.js';
+import { initPWA } from './pwa.js';
+import { initTouchFeedback } from './cinematics.js';
+initPWA();
+initTouchFeedback();
 
 (async () => {
   const { data } = await sb.auth.getSession();

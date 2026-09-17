@@ -98,6 +98,9 @@ infinie. Symptôme : `infinite recursion detected in policy for relation
 | Un malus n'a rien retiré | écrêtage à zéro, comportement attendu, la note le dit |
 | Le compte à rebours affiche « — » | `v_child_rate` à 0 : aucun point gagné sur 28 jours |
 | Une nouvelle vue renvoie les données d'une autre famille | `security_invoker` oublié à la création de la vue |
+| L'installation PWA n'est pas proposée | site ouvert en `file://`, manifeste absent, ou version de service worker inchangée |
+| Un nouveau téléphone affiche l'ancienne interface | `VERSION` de `sw.js` non incrémentée |
+| Les confettis ne bougent pas | préférence système `prefers-reduced-motion`, comportement volontaire |
 | `permission denied for function add_event` | le `revoke` de la migration 05 a été appliqué sans le `grant` à `authenticated` |
 
 ## 4. Calibration, à réviser tous les trimestres
@@ -130,7 +133,36 @@ prénoms** plutôt qu'un champ e-mail libre : l'adresse est résolue côté
 client à partir du prénom choisi, il ne reste que le mot de passe à saisir.
 C'est plus rapide sur un téléphone et cela évite le mélange de Chrome.
 
-## 6. Ce qui reste ouvert
+## 6. Cinématiques et PWA
+
+`js/cinematics.js` reprend la mécanique UX validée dans Santiago : le niveau
+est calculé à partir du nombre réel retourné par la base, trois paliers, un
+canvas de particules sans boucle inactive, une file quand plusieurs clics
+arrivent pendant un effet, et respect de `prefers-reduced-motion`. Ne pas
+recalculer les points dans ce module : `add_event` reste l'unique source de
+vérité.
+
+`manifest.webmanifest`, `sw.js`, les icônes et `js/pwa.js` reprennent le mode
+application validé dans Chicago-Bruno-Chris. Le shell est mis en cache, pas
+les données Supabase. La version du cache doit être incrémentée à chaque
+livraison front, sinon un téléphone installé peut servir une ancienne version.
+La refonte responsive actuelle est `2026-09-17c`.
+
+Depuis la v3, `nav.js` n'existe plus. `js/app.js` est la coquille : il monte
+les cinq vues dans `index.html`, gère la barre basse, la feuille de menu, le
+glissement horizontal et le routage par `#hash`. Chaque vue exporte
+`mount(root)` et, quand c'est utile, `refreshView()` rappelé à chaque retour
+sur l'onglet. Ne jamais remettre un module de vue en auto-exécution : il
+s'exécuterait hors de sa vue.
+Les variables `--nav-height`, `--mobile-tabs-height`, `--safe-top` et
+`--safe-bottom` centralisent les hauteurs utilisées par le scroll, les toasts,
+les feuilles et les ancres. Ne pas remplacer ces valeurs par des hauteurs
+recopiées dans plusieurs règles. Les
+pages restent séparées, mais l'usage sur téléphone se comporte comme une
+application : Saisie, Enfants, Journal, Analyse à portée du pouce, Réglages
+et Installation dans Menu.
+
+## 7. Ce qui reste ouvert
 
 - Mode kiosque enfant sans mot de passe (lien en lecture seule avec jeton
   dédié) : aujourd'hui l'écran enfant s'ouvre depuis la session d'un parent.

@@ -47,17 +47,26 @@ Air-Bartoli/
 │       └── instructions.md  instructions de l'agent Dust du projet
 ├── css/
 │   └── app.css              feuille unique, variables CSS dans :root
+├── assets/
+│   ├── icon-192.png         icône PWA
+│   ├── icon-512.png         icône PWA haute résolution
+│   ├── icon-maskable-512.png icône Android maskable
+│   └── apple-touch-icon-180.png
+├── manifest.webmanifest     installation comme application
+├── sw.js                    cache de l'interface, versionné
+├── .nojekyll                publication GitHub Pages sans Jekyll
 ├── js/
-│   ├── config.js            ⚠️ LES 2 VALEURS À RENSEIGNER
+│   ├── config.js            URL et clé publiable du projet Supabase
 │   ├── api.js               client Supabase, auth, appels RPC, dates
 │   ├── ui.js                helpers d'affichage, toasts, graphiques SVG
+│   ├── cinematics.js        paliers, confettis canvas, file d'animations
+│   ├── pwa.js               installation, service worker, aide iOS/Android
 │   ├── nav.js               barre de navigation injectée
 │   ├── saisie.js            logique de la saisie rapide
 │   ├── enfant.js            écran enfant
 │   ├── historique.js        journal et corrections
 │   ├── dashboard.js         analyses
 │   └── reglages.js          paramétrage
-└── assets/
 ```
 
 ## État de la mise en service
@@ -70,22 +79,49 @@ Air-Bartoli/
 | Recette fonctionnelle, 21 scénarios | **fait, tous verts** |
 | `js/config.js` renseigné | **fait** |
 | Comptes Névine et Bruno + rattachement `parents` | **fait** |
-| Front : 6 pages, `css/app.css`, 9 modules JS | **fait** |
+| Front : 6 pages, `css/app.css`, 11 modules JS | **fait** |
 | Publication GitHub Pages | à faire |
 
 Il ne reste que la publication : `Settings` → `Pages` → `Deploy from a
 branch` → `main` / `(root)`. L'application est utilisable immédiatement après.
 
-## Les six pages
+## Une seule page, cinq écrans
 
-| Page | À quoi elle sert |
+Depuis la v3, l'application n'est plus un site à six pages mais **une
+coquille applicative** : `index.html` contient cinq vues, une seule visible à
+la fois, exactement comme le mode application de `Chicago-Bruno-Chris`.
+
+| Vue | À quoi elle sert |
 |---|---|
-| `login.html` | deux boutons aux prénoms, puis le mot de passe |
-| `index.html` | **la saisie**, la page du soir : enfant, moment, tuile. Deux appuis |
-| `enfant.html` | l'écran qu'on montre aux enfants : solde, niveau, catalogue, comptes à rebours |
-| `historique.html` | le journal, avec annulation et réparation |
-| `dashboard.html` | où se gagnent et où se perdent les points, et à quel moment |
-| `reglages.html` | enfants, catégories, barème, catalogue, jours spéciaux, bonus de régularité |
+| Saisie | la vue du soir : enfant, moment, tuile. Deux appuis |
+| Enfants | solde, niveau, catalogue, comptes à rebours |
+| Journal | l'historique, avec annulation et réparation |
+| Analyse | où se gagnent et où se perdent les points |
+| Réglages | enfants, catégories, barème, catalogue, jours spéciaux |
+
+On passe d'un écran à l'autre de trois façons :
+
+1. **en glissant le doigt** horizontalement, comme dans une application ;
+2. par la **barre basse** dans la zone du pouce ;
+3. par la **feuille de menu**, qui contient aussi Réglages, Installation,
+   Recherche de mise à jour et Déconnexion.
+
+`login.html` reste une page séparée : c'est la porte d'entrée, avant la
+coquille. Les anciennes adresses `enfant.html`, `historique.html`,
+`dashboard.html` et `reglages.html` sont conservées comme simples
+redirections vers l'onglet correspondant.
+
+## Les deux bandeaux, repris de Chicago
+
+| Bandeau | Quand il apparaît | Ce qu'il propose |
+|---|---|---|
+| `#installBanner` | tant que l'application n'est pas installée | bouton **Installer**, et une croix qui le met en veille 7 jours |
+| `#swBanner` | dès qu'une nouvelle version est déployée | bouton **Mettre à jour**, qui active la nouvelle version et recharge |
+
+La détection de mise à jour est automatique : au démarrage, à chaque retour
+sur l'application, et manuellement depuis **Menu → Rechercher une mise à
+jour**. C'est le `service worker` qui signale la version en attente, et le
+bouton lui envoie `air-bartoli-skip-waiting`.
 
 ### Ce que fait la saisie, et ce qu'elle ne fait pas
 
@@ -101,6 +137,49 @@ est modifiable pour rattraper une soirée oubliée, jamais vers le futur.
 
 La case « ajouter une note » transforme l'appui en petite fenêtre. Les
 catégories à points libres (`Exceptionnel`, `Régularité`) l'ouvrent toujours.
+
+
+## Mode application et responsive mobile
+
+Air Bartoli est maintenant une **PWA installable** depuis la première page :
+
+- `manifest.webmanifest` décrit l'application, son icône, ses raccourcis et
+  son affichage autonome ;
+- `sw.js` met en cache l'interface et les icônes dès la première visite ;
+- les appels Supabase ne sont volontairement jamais mis en cache, pour qu'un
+  solde périmé ne soit jamais présenté comme actuel ;
+- Android affiche le bouton « Installer l'application » quand le navigateur
+  rend l'installation disponible ;
+- sur iPhone et iPad, le bouton explique le geste « Partager → Sur l'écran
+  d'accueil » ;
+- sous 760 px, la navigation passe en barre basse au pouce avec quatre accès
+  directs et un menu coulissant, selon le principe de `Chicago-Bruno-Chris`.
+
+La version du cache est `2026-09-17a`. À chaque livraison front, incrémenter
+la constante `VERSION` dans `sw.js` et le paramètre `?v=` du manifeste dans les
+pages HTML. Sinon un téléphone déjà installé peut conserver l'ancienne
+interface.
+
+## Cinématiques de points
+
+Chaque ajout positif déclenche une cinématique à partir du **nombre réellement
+retourné par Supabase**, jamais à partir d'un barème recopié dans le front :
+
+| Palier | Points ajoutés | Effet |
+|---|---:|---|
+| 1 | 1 à 4 | tuile qui pulse et « +X point(s) » |
+| 2 | 5 à 15 | pulse plus marqué, particules bleu/vert |
+| 3 | 16 et plus | message central, confettis canvas et trois salves latérales |
+
+Les animations sont mises en file : quatre saisies rapides produisent une
+célébration cumulée plutôt que quatre feux d'artifice superposés. Les malus ne
+déclenchent pas de fête, ils ont seulement un retour visuel bref. Le mode
+`prefers-reduced-motion` désactive les particules et les grands mouvements.
+
+La logique est isolée dans `js/cinematics.js`, de la même façon que
+`Santiago-performances` isole sa couche UX dans `js/saisie-ux.js`. Cela permet
+de modifier l'intensité des effets sans toucher au métier ni aux appels
+Supabase.
 
 ## Les deux compteurs, cœur du système
 

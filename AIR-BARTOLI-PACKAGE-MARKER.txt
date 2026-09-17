@@ -1,0 +1,14 @@
+AIR BARTOLI PACKAGE MARKER
+==========================
+Package: Air-Bartoli v3
+Created: 2026-09-17 23:58:04 Europe/Paris
+Archive: Air-Bartoli-v3-20260917-235804.zip
+Expected deployed commit family: v3 app shell
+Expected cache version: 2026-09-17c
+Distinctive checks:
+- index.html contains data-view="saisie" and the app shell
+- js/app.js contains enableSwipe
+- js/pwa.js contains the install and update flows
+- sw.js contains VERSION = '2026-09-17c'
+
+This marker is included only to make the intended upload unambiguous.

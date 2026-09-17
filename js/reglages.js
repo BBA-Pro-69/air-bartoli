@@ -4,9 +4,9 @@
 //  Seule regle : changer un bareme n'affecte que l'avenir.
 // =====================================================================
 import * as api from './api.js';
-import { mountNav } from './nav.js';
-import { $, el, toast, fail, modal } from './ui.js';
+import { el, toast, fail, modal } from './ui.js';
 
+let root = null;
 let children = [], cats = [], rewards = [], special = [], famille = null;
 const ETALON = 22;                      // points par semaine et par enfant
 const SYSTEME = ['Exceptionnel', 'Régularité', 'Ajustement'];
@@ -118,7 +118,7 @@ function formRecompense(r) {
 
 // ---------------------------------------------------------------------
 function render() {
-  const app = $('#app'); app.innerHTML = '';
+  const app = root; app.innerHTML = '';
   app.append(el('h1', {}, 'Réglages'));
 
   // --- enfants
@@ -251,9 +251,14 @@ function render() {
       }, 'Accorder'))));
 }
 
-(async function main() {
-  const me = await mountNav();
-  if (!me) return;
+export async function mount(container, me) {
+  root = container;
   famille = me.family_id;
+  root.innerHTML = '<p class="muted">Chargement…</p>';
   try { await reload(); } catch (e) { fail(e); }
-})();
+}
+
+export async function refreshView() {
+  if (!root) return;
+  try { await reload(); } catch (e) { fail(e); }
+}

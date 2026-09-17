@@ -4,8 +4,11 @@
 //  Il n'y a pas de bouton "valider" : l'appui sur une tuile ecrit.
 // =====================================================================
 import * as api from './api.js';
-import { mountNav } from './nav.js';
-import { $, el, pts, toast, fail, undoBar, modal } from './ui.js';
+import { el, pts, toast, fail, undoBar, modal } from './ui.js';
+import { celebrate, celebrateMilestone } from './cinematics.js';
+
+let root = null;
+const $ = s => root.querySelector(s);
 
 let state = {
   children: [], cats: [], balances: [], levels: [],
@@ -73,7 +76,7 @@ function tile(cat, free = false) {
   const p = malus ? -Math.abs(cat.default_points) : cat.default_points;
   return el('button', {
     class: 'tile ' + (malus ? 'tile-malus' : 'tile-bonus'),
-    onclick: () => (free || state.withNote) ? askThenWrite(cat, free) : write(cat, null, null)
+    onclick: ev => (free || state.withNote) ? askThenWrite(cat, free) : write(cat, null, null, ev.currentTarget)
   },
     el('span', { class: 'tile-label' }, cat.label),
     el('span', { class: 'tile-pts' }, free ? 'au choix' : pts(p)));
@@ -88,14 +91,17 @@ function askThenWrite(cat, free) {
     el('div', { class: 'field' }, el('label', {}, 'Note'), note));
   modal(cat.label, body, [{
     label: 'Enregistrer', class: 'btn-primary',
-    onClick: close => { close(); write(cat, free ? Number(points.value) : null, note.value); }
+    onClick: close => { close(); write(cat, free ? Number(points.value) : null, note.value, null); }
   }]);
 }
 
-async function write(cat, points, note) {
+async function write(cat, points, note, origin = null) {
   try {
     const ev = await api.addEvent(state.child, cat.id, points, state.date, state.dayPart, note);
     const child = state.children.find(c => c.id === state.child);
+    // La cinématique part dès que la base confirme le nombre réel de points.
+    // Le barème n'est donc jamais dupliqué dans le front.
+    celebrate(ev.points, origin, cat.label);
     await refresh();
     if (ev.points === 0 && cat.kind === 'malus') {
       toast(child.first_name + ' est déjà à 0 : rien retiré, mais c\'est noté.', 'ok', 5000);
@@ -128,7 +134,12 @@ async function renderPending() {
         el('div', { class: 'entry-meta' }, r.cost_total + ' pts · ' + who)),
       el('button', {
         class: 'btn btn-sm btn-primary', onclick: async () => {
-          try { await api.approveRedemption(r.id); toast('Échange validé. Bon vol.'); await refresh(); renderPending(); }
+          try {
+            await api.approveRedemption(r.id);
+            celebrateMilestone('🎁 ' + r.rewards.label);
+            toast('Échange validé. Bon vol.');
+            await refresh(); renderPending();
+          }
           catch (e) { fail(e); }
         }
       }, 'Valider'),
@@ -142,11 +153,10 @@ async function renderPending() {
 }
 
 // ---------------------------------------------------------------------
-(async function main() {
-  if (!await mountNav()) return;
-  const app = $('#app');
-  app.innerHTML = '';
-  app.append(
+export async function mount(container) {
+  root = container;
+  root.innerHTML = '';
+  root.append(
     el('h1', {}, 'Saisie'),
     el('p', { class: 'muted' }, "Un appui sur une tuile enregistre tout de suite. Dix secondes pour revenir en arrière."),
     el('div', { class: 'card' }, el('div', { class: 'kids', id: 'kids' })),
@@ -185,4 +195,9 @@ async function renderPending() {
     await refresh();
     renderChips(); renderTiles(); renderPending();
   } catch (e) { fail(e); }
-})();
+}
+
+export async function refreshView() {
+  if (!root) return;
+  try { await refresh(); renderTiles(); renderPending(); } catch (e) { fail(e); }
+}
