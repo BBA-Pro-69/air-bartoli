@@ -2,8 +2,8 @@
 // Air Bartoli / Keyrilès - cinématiques de récompense
 // Inspiré de la mécanique de Santiago-performances :
 //   palier 1 : retour discret, dès le premier point
-//   palier 2 : pluie de particules, à partir de 5 points
-//   palier 3 : célébration complète, à partir de 16 points
+//   palier 2 : pluie de particules, à partir d'un seuil réglable
+//   palier 3 : célébration complète, à partir d'un seuil réglable
 //
 // Une seule cinématique est jouée à la fois. Les saisies qui arrivent
 // pendant l'animation sont cumulées, puis jouées ensemble. Cela évite
@@ -16,6 +16,14 @@ let busy = false, queued = null;
 
 const COLORS = ['#00A7E1', '#0369a1', '#16a34a', '#f59e0b', '#eab308', '#8b5cf6', '#ffffff'];
 const DURATIONS = { 1: 520, 2: 820, 3: 1550 };
+let thresholds = { level_1_min: 1, level_2_min: 5, level_3_min: 16 };
+
+export function setCinematicThresholds(settings = {}) {
+  const l1 = Math.max(1, Number(settings.level_1_min) || 1);
+  const l2 = Math.max(l1 + 1, Number(settings.level_2_min) || 5);
+  const l3 = Math.max(l2 + 1, Number(settings.level_3_min) || 16);
+  thresholds = { level_1_min: l1, level_2_min: l2, level_3_min: l3 };
+}
 
 function ensureCanvas() {
   if (canvas) return canvas;
@@ -119,7 +127,8 @@ function celebrateNow(points, origin, label = '') {
     if (origin) pulse(origin, 1);
     return 0;
   }
-  const level = points >= 16 ? 3 : points >= 5 ? 2 : 1;
+  const level = points >= thresholds.level_3_min ? 3
+    : points >= thresholds.level_2_min ? 2 : 1;
   const rect = origin?.getBoundingClientRect?.();
   const x = rect ? rect.left + rect.width / 2 : innerWidth / 2;
   const y = rect ? rect.top + rect.height / 2 : innerHeight * .38;

@@ -39,6 +39,7 @@ Air-Bartoli/
 │   ├── 03-seed-v1.sql          catégories, niveaux et catalogue de départ
 │   ├── 04-views-security-invoker.sql  les vues respectent la RLS
 │   ├── 05-hardening.sql        search_path et retrait des droits du rôle anon
+│   ├── 06-cinematic-settings.sql seuils des effets, par famille
 │   └── 99-parents-bootstrap.sql rattachement des comptes parents
 ├── Info IA/
 │   ├── handover.md          architecture, décisions, pièges (source unique)
@@ -61,7 +62,6 @@ Air-Bartoli/
 │   ├── ui.js                helpers d'affichage, toasts, graphiques SVG
 │   ├── cinematics.js        paliers, confettis canvas, file d'animations
 │   ├── pwa.js               installation, service worker, aide iOS/Android
-│   ├── nav.js               barre de navigation injectée
 │   ├── saisie.js            logique de la saisie rapide
 │   ├── enfant.js            écran enfant
 │   ├── historique.js        journal et corrections
@@ -74,7 +74,7 @@ Air-Bartoli/
 | Étape | État |
 |---|---|
 | Projet Supabase `air-bartoli` (`dgsvpxeqwdyeudqubayd`), région Paris | **fait** |
-| Migrations 01 à 05 appliquées | **fait** |
+| Migrations 01 à 06 appliquées | **fait** |
 | Catégories, niveaux et catalogue chargés | **fait** |
 | Recette fonctionnelle, 21 scénarios | **fait, tous verts** |
 | `js/config.js` renseigné | **fait** |
@@ -155,7 +155,7 @@ Air Bartoli est maintenant une **PWA installable** depuis la première page :
 - sous 760 px, la navigation passe en barre basse au pouce avec quatre accès
   directs et un menu coulissant, selon le principe de `Chicago-Bruno-Chris`.
 
-La version du cache est `2026-09-17a`. À chaque livraison front, incrémenter
+La version du cache est `2026-09-18a`. À chaque livraison front, incrémenter
 la constante `VERSION` dans `sw.js` et le paramètre `?v=` du manifeste dans les
 pages HTML. Sinon un téléphone déjà installé peut conserver l'ancienne
 interface.
@@ -167,16 +167,16 @@ retourné par Supabase**, jamais à partir d'un barème recopié dans le front :
 
 | Palier | Points ajoutés | Effet |
 |---|---:|---|
-| 1 | 1 à 4 | tuile qui pulse et « +X point(s) » |
-| 2 | 5 à 15 | pulse plus marqué, particules bleu/vert |
-| 3 | 16 et plus | message central, confettis canvas et trois salves latérales |
+| 1 | seuil 1 à seuil 2 - 1 | tuile qui pulse et « +X point(s) » |
+| 2 | seuil 2 à seuil 3 - 1 | pulse plus marqué, particules bleu/vert |
+| 3 | seuil 3 et plus | message central, confettis canvas et trois salves latérales |
 
 Les animations sont mises en file : quatre saisies rapides produisent une
 célébration cumulée plutôt que quatre feux d'artifice superposés. Les malus ne
 déclenchent pas de fête, ils ont seulement un retour visuel bref. Le mode
 `prefers-reduced-motion` désactive les particules et les grands mouvements.
 
-La logique est isolée dans `js/cinematics.js`, de la même façon que
+Les seuils sont réglables depuis Réglages, stockés dans Supabase par famille, et s’appliquent aux points gagnés lors d’une seule saisie. Les valeurs par défaut restent 1, 5 et 16. La logique est isolée dans `js/cinematics.js`, de la même façon que
 `Santiago-performances` isole sa couche UX dans `js/saisie-ux.js`. Cela permet
 de modifier l'intensité des effets sans toucher au métier ni aux appels
 Supabase.
@@ -380,3 +380,10 @@ depuis. Tous verts :
 | `insert`, `update`, `delete` directs sur `events` | refusés |
 | Rôle `anon` sur `events` | 0 ligne visible |
 | Création d'une sous-sous-catégorie | refusée |
+
+
+## Réglage des cinématiques
+
+Dans le menu **Réglages**, la carte **Cinématiques de récompense** permet de choisir les trois seuils : retour discret, pluie de particules et feu d’artifice. Les valeurs doivent être des entiers strictement croissants. Le réglage est enregistré dans `cinematic_settings`, une ligne par famille, avec RLS. Il est donc partagé entre les téléphones de Bruno et Névine.
+
+Les seuils portent sur le nombre de points positifs réellement retournés par une saisie. Un malus ne déclenche jamais de célébration.

@@ -172,3 +172,8 @@ et Installation dans Menu.
 - Expiration des points : volontairement **non implémentée**. Un enfant qui
   perd des points en dormant ne comprendrait pas, et les compagnies aériennes
   sont détestées pour exactement cette raison.
+
+
+## Dernière évolution : seuils de cinématiques
+
+La migration `06-cinematic-settings.sql` ajoute `cinematic_settings`, par famille. Le front charge ces valeurs au démarrage dans `app.js`, puis les applique dans `cinematics.js`. La page Réglages permet de modifier les trois seuils, qui doivent rester strictement croissants. Les valeurs par défaut et de secours sont 1, 5 et 16.

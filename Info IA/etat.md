@@ -65,3 +65,10 @@ famille, 2 enfants, 35 catégories, 10 récompenses et 2 soldes visibles, tous
 Aucune écriture dans `events` : le journal démarre au premier point donné par
 un parent. Le compte technique de recette et toutes ses données ont été
 supprimés.
+
+
+## 18 septembre 2026 : seuils de cinématiques configurables
+
+La table `cinematic_settings` a été ajoutée dans Supabase. Elle contient une ligne par famille avec les trois seuils `level_1_min`, `level_2_min` et `level_3_min`, initialisés à 1, 5 et 16. La RLS limite lecture et écriture aux parents de la famille.
+
+La carte **Cinématiques de récompense** est disponible dans **Réglages**. Les seuils s’appliquent aux points positifs gagnés lors d’une seule saisie. Le cache PWA passe à `2026-09-18a`.

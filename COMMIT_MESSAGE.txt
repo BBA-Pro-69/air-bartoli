@@ -1,68 +1,143 @@
-feat: front complet d'Air Bartoli, saisie en deux appuis
+feat: initialise Air Bartoli, programme de fidelite familial Keyriles
 
 ----------------------------------------------------------------------
-Perimetre
+Pourquoi ce projet
 ----------------------------------------------------------------------
-Six pages statiques, une feuille de style, neuf modules ES. Aucun build,
-aucune dependance npm, un seul import CDN : supabase-js. Les fichiers du
-depot sont exactement ceux servis au navigateur.
-
-login.html      deux boutons aux prenoms, puis le mot de passe
-index.html      la saisie : enfant, moment, tuile. Deux appuis
-enfant.html     solde, niveau, catalogue, comptes a rebours
-historique.html journal, annulation, reparation
-dashboard.html  ou se gagnent et ou se perdent les points
-reglages.html   enfants, categories, bareme, catalogue, jours speciaux
+Remplacer la negociation quotidienne et les cris par un cadre ecrit,
+previsible et consultable, dont les enfants deviennent les pilotes.
+Le systeme est calque sur un programme de miles aerien parce que cette
+metaphore apporte une propriete que les gommettes n'ont pas : la
+separation entre ce qui se depense et ce qui reste acquis.
 
 ----------------------------------------------------------------------
-Connexion par prenom
+Decision structurante : deux compteurs
 ----------------------------------------------------------------------
-Les applications du compte partagent l'origine fluxym-bba.github.io et
-Chrome melange les mots de passe. Les deux adresses Gmail ayant des
-prefixes dissemblables, le recollage de domaine habituel ne s'applique
-pas : l'ecran propose deux boutons portant les prenoms et resout
-l'adresse cote client. Il ne reste que le mot de passe a saisir.
+- Solde depensable (v_child_balance) : tous les evenements sommes.
+- Miles de statut (v_child_status) : seuls les gains, jamais debites.
+Un echange porte counts_status = false, donc depenser ne fait jamais
+perdre de niveau. Sans cette separation, chaque grosse recompense est
+vecue comme un retour a zero et le systeme s'eteint apres le premier
+cadeau.
 
 ----------------------------------------------------------------------
-Saisie : pas de bouton valider
+Decision structurante : journal en ajout seul
 ----------------------------------------------------------------------
-L'appui sur une tuile ecrit immediatement via add_event, et un bandeau
-laisse dix secondes pour contrepasser. Au-dela, l'annulation reste
-possible depuis l'historique mais devient une ecriture visible : passe
-dix secondes ce n'est plus une faute de frappe, c'est un changement
-d'avis, et un changement d'avis se montre.
+events n'a qu'une politique SELECT, plus un revoke explicite sur
+insert/update/delete. Toute saisie passe par les fonctions security
+definer. Une erreur se corrige par une ecriture inverse, jamais par une
+suppression. On ne reecrit pas le passe devant un enfant de 7 ans.
 
-Le moment de la journee est preselectionne d'apres l'heure de Paris. La
-date est modifiable vers le passe uniquement.
-
-----------------------------------------------------------------------
-Ecran enfant
-----------------------------------------------------------------------
-Solde en 3,2 rem, niveau et distance au niveau suivant, puis le
-catalogue. Sous chaque recompense : "il te manque 40 points, dans 12
-jours", calcule par v_reward_eligibility sur le rythme des 28 derniers
-jours. Aucun classement entre les deux freres nulle part.
-
-Les sorties collectives affichent la cagnotte ET le compte de chacun
-face au minimum. La repartition proposee est proportionnelle aux soldes,
-plancher au minimum par enfant, ajustable avant envoi.
+Les points sont figes sur l'evenement (base_points + multiplier, points
+en colonne generee). Changer un bareme n'affecte que l'avenir. C'est la
+difference assumee avec Santiago-performances, ou le score est recalcule
+par la vue.
 
 ----------------------------------------------------------------------
-Reglages
+Garde-fous sur le malus
 ----------------------------------------------------------------------
-Le formulaire de recompense affiche en direct l'attente induite par le
-prix, a 22 points par semaine, et alerte en rouge au-dela de seize
-semaines. Les categories systeme sont signalees comme non renommables.
+Une perte est ressentie deux a trois fois plus fort qu'un gain, et un
+enfant dans le rouge decroche. D'ou :
+- ecretage a zero, l'ecriture est conservee a 0 point avec sa mention
+  pour que l'analyse reste juste ;
+- max_per_day par categorie, contre la spirale du meme soir ;
+- repair_event, qui rend la moitie du malus quand l'enfant repare ;
+- le multiplicateur des jours speciaux ne s'applique qu'aux gains.
 
 ----------------------------------------------------------------------
-Detail corrige avant livraison
+Recompenses collectives
 ----------------------------------------------------------------------
-Le refus d'une demande d'echange passait par un upsert, qui exige toutes
-les colonnes NOT NULL meme quand la ligne existe. Ajout d'un helper
-update() distinct de save().
+approve_redemption verifie deux conditions : le total ET le minimum par
+enfant. Sans la seconde, l'aine paie la sortie pour le cadet, le cadet
+n'apprend rien et l'aine le vit comme un vol.
 
 ----------------------------------------------------------------------
-Verification
+Calibration
 ----------------------------------------------------------------------
-Les quatorze lectures du front rejouees en base sous l'identite reelle
-de Bruno : toutes passent la RLS et renvoient le bon perimetre.
+Etalon de 22 points par semaine et par enfant. Regle inscrite dans le
+README : prix = semaines d'attente souhaitees x 22. Walibi est a 350
+points et non 700 : a 700, l'attente depasse sept mois, ce qu'aucun
+enfant de cinq ans ne tient. v_reward_eligibility expose days_left, le
+compte a rebours qui rend un objectif lointain representable.
+
+----------------------------------------------------------------------
+Securite
+----------------------------------------------------------------------
+- RLS active sur les dix tables, cloisonnement par family_id.
+- Les huit vues portent security_invoker = on : sans cette option une
+  vue s'execute avec les droits de son proprietaire et contourne la RLS.
+- search_path fige sur les fonctions de trigger.
+- Le role anon n'a l'execution d'aucune fonction metier, que PostgREST
+  expose automatiquement en /rest/v1/rpc/.
+
+----------------------------------------------------------------------
+Etat
+----------------------------------------------------------------------
+Projet Supabase dedie air-bartoli (dgsvpxeqwdyeudqubayd, eu-west-3),
+migrations 01 a 05 appliquees, catalogue charge, recette de 21 scenarios
+jouee sur la base reelle puis donnees de test supprimees. Reste a creer
+les deux comptes parents et a executer 99-parents-bootstrap.sql.
+Le front n'est pas encore ecrit.
+
+----------------------------------------------------------------------
+UX : cinématiques et mode application
+----------------------------------------------------------------------
+Reprise de la mécanique de Santiago-performances dans js/cinematics.js :
+les points sont lus depuis la réponse réelle de add_event, puis trois
+paliers sont joués. Les saisies qui arrivent pendant un effet sont
+cumulées. Les malus ne déclenchent pas de fête et prefers-reduced-motion
+supprime les particules.
+
+Reprise du mode PWA de Chicago-Bruno-Chris : manifest.webmanifest, sw.js,
+quatre icônes, .nojekyll, cache shell versionné et aide d'installation
+iOS/Android. Sous 760 px, barre de navigation basse au pouce et menu
+coulissant. Supabase n'est jamais mis en cache.
+
+----------------------------------------------------------------------
+Responsive v2, mobile d'abord
+----------------------------------------------------------------------
+Reorganise l'experience telephone selon les patterns de Chicago-Bruno-Chris
+et whova-contacts-esker-chicago : barre basse dans la zone du pouce, panneau
+coulissant, feuilles plein ecran, champs 16px anti-zoom iOS, safe areas,
+variables de hauteurs collantes, grilles sans largeur minimale et absence de
+debordement horizontal. Version du cache PWA : 2026-09-17b.
+
+----------------------------------------------------------------------
+v3 : vraie application a onglets
+----------------------------------------------------------------------
+Le site multi-pages devient une coquille applicative. index.html porte
+cinq vues, une seule visible, montees a la demande. On change d'ecran en
+glissant le doigt, par la barre basse ou par la feuille de menu. Les vues
+exportent mount() et refreshView() au lieu de s'auto-executer.
+
+Reprise fidele de Chicago-Bruno-Chris :
+- #installBanner, masque 7 jours si on le ferme, bouton Installer aussi
+  dans l'en-tete et dans le menu ;
+- #swBanner, affiche des qu'une nouvelle version est prete, avec bouton
+  Mettre a jour qui envoie air-bartoli-skip-waiting puis recharge ;
+- verification de mise a jour au demarrage, au retour sur l'application,
+  et manuellement depuis Menu ;
+- barre basse avec poignee, feuille arrondie, tuiles de rubriques.
+
+Effets : onde au point de contact sur tout element cliquable, vibrations
+courtes, celebration dediee a la validation d'un echange, en plus des
+trois paliers de confettis deja en place.
+
+Deux bugs corriges avant livraison : classList.add('') levait une
+exception au premier affichage, et la marge d'encoche iOS ne s'appliquait
+jamais car .appbar n'est pas :first-child.
+
+Cache PWA : 2026-09-17c.
+
+
+----------------------------------------------------------------------
+Seuils de cinématiques configurables
+----------------------------------------------------------------------
+Ajout d'une table cinematic_settings par famille, protégée par RLS, avec
+trois seuils strictement croissants. La page Réglages permet désormais de
+définir à partir de combien de points une saisie déclenche le retour discret,
+la pluie de particules ou le feu d'artifice. Les seuils s'appliquent aux
+points gagnés lors d'une seule saisie, et les malus ne déclenchent jamais de
+célébration. Valeurs par défaut : 1, 5 et 16.
+
+Le front charge ces valeurs depuis Supabase au démarrage. La version du cache
+PWA est 2026-09-18a.

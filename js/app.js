@@ -4,10 +4,10 @@
 //  comme le mode application de Chicago-Bruno-Chris. Le glissement
 //  horizontal fait défiler les vues, la barre basse les sélectionne.
 // =====================================================================
-import { requireSession, signOut } from './api.js';
+import { requireSession, signOut, getCinematicSettings } from './api.js';
 import { toast, fail } from './ui.js';
 import { initPWA, checkForUpdates, syncInstallUI, vibrate, isStandalone } from './pwa.js';
-import { initTouchFeedback } from './cinematics.js';
+import { initTouchFeedback, setCinematicThresholds } from './cinematics.js';
 import * as saisie from './saisie.js';
 import * as enfant from './enfant.js';
 import * as historique from './historique.js';
@@ -125,6 +125,10 @@ function closeMenu() {
   initTouchFeedback();
   me = await requireSession();
   if (!me) return;
+
+  // Les seuils viennent de Supabase, par famille. En cas de réseau indisponible,
+  // les valeurs historiques de cinematics.js restent utilisées.
+  try { setCinematicThresholds(await getCinematicSettings()); } catch (_) {}
 
   byId('userName').textContent = me.display_name;
   byId('appShell').hidden = false;

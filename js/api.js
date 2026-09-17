@@ -93,6 +93,11 @@ export const getRates      = () => rows(sb.from('v_child_rate').select('*'));
 export const getEligibility= () => rows(sb.from('v_reward_eligibility').select('*'));
 export const getStatusLevels=() => rows(sb.from('status_levels').select('*').order('min_points'));
 export const getSpecialDays= () => rows(sb.from('special_days').select('*').order('day', { ascending: false }));
+export async function getCinematicSettings() {
+  const { data, error } = await sb.from('cinematic_settings').select('*').maybeSingle();
+  if (error) throw error;
+  return data || { level_1_min: 1, level_2_min: 5, level_3_min: 16 };
+}
 export const getDaily      = (since) => rows(sb.from('v_daily').select('*').gte('event_date', since).order('event_date'));
 export const getProfile    = () => rows(sb.from('v_category_profile').select('*'));
 

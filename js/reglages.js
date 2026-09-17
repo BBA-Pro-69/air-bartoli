@@ -7,7 +7,7 @@ import * as api from './api.js';
 import { el, toast, fail, modal } from './ui.js';
 
 let root = null;
-let children = [], cats = [], rewards = [], special = [], famille = null;
+let children = [], cats = [], rewards = [], special = [], cinematic = null, famille = null;
 const ETALON = 22;                      // points par semaine et par enfant
 const SYSTEME = ['Exceptionnel', 'Régularité', 'Ajustement'];
 
@@ -15,8 +15,8 @@ const subs  = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
 
 async function reload() {
-  [children, cats, rewards, special] = await Promise.all([
-    api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays()]);
+  [children, cats, rewards, special, cinematic] = await Promise.all([
+    api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(), api.getCinematicSettings()]);
   render();
 }
 
@@ -120,6 +120,43 @@ function formRecompense(r) {
 function render() {
   const app = root; app.innerHTML = '';
   app.append(el('h1', {}, 'Réglages'));
+
+  // --- cinématiques
+  const fx1 = el('input', { type: 'number', min: '1', max: '999', value: String(cinematic?.level_1_min ?? 1) });
+  const fx2 = el('input', { type: 'number', min: '2', max: '999', value: String(cinematic?.level_2_min ?? 5) });
+  const fx3 = el('input', { type: 'number', min: '3', max: '999', value: String(cinematic?.level_3_min ?? 16) });
+  const fxHelp = el('p', { class: 'muted' },
+    'Les seuils s’appliquent aux points gagnés lors d’une seule saisie. Les malus ne déclenchent jamais de feu d’artifice.');
+  const fxError = el('p', { class: 'error', hidden: true });
+  const fxCard = el('div', { class: 'card' },
+    el('h2', {}, 'Cinématiques de récompense'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Choisis à partir de combien de points chaque niveau d’effet se déclenche.'),
+    el('div', { class: 'fields' },
+      champ('Retour discret dès', fx1),
+      champ('Pluie de particules dès', fx2),
+      champ('Feu d’artifice dès', fx3)),
+    fxHelp,
+    fxError,
+    el('button', { class: 'btn btn-primary btn-sm', onclick: async () => {
+      const a = Number(fx1.value), b = Number(fx2.value), c = Number(fx3.value);
+      if (!Number.isInteger(a) || !Number.isInteger(b) || !Number.isInteger(c) || a < 1 || b <= a || c <= b) {
+        fxError.hidden = false;
+        fxError.textContent = 'Les seuils doivent être des nombres entiers croissants : niveau 1 < niveau 2 < niveau 3.';
+        return;
+      }
+      fxError.hidden = true;
+      try {
+        await api.save('cinematic_settings', {
+          family_id: famille, level_1_min: a, level_2_min: b, level_3_min: c
+        });
+        cinematic = { family_id: famille, level_1_min: a, level_2_min: b, level_3_min: c };
+        const mod = await import('./cinematics.js');
+        mod.setCinematicThresholds(cinematic);
+        toast('Seuils des cinématiques enregistrés.');
+      } catch (e) { fail(e); }
+    }}, 'Enregistrer les seuils'));
+  app.append(fxCard);
 
   // --- enfants
   app.append(el('div', { class: 'card' },
