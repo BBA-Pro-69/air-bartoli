@@ -4,7 +4,7 @@
 //  Seule regle : changer un bareme n'affecte que l'avenir.
 // =====================================================================
 import * as api from './api.js';
-import { el, toast, fail, modal } from './ui.js';
+import { el, toast, fail, modal, personLabel } from './ui.js';
 
 let root = null;
 let children = [], cats = [], rewards = [], special = [], cinematic = null, famille = null;
@@ -188,7 +188,7 @@ function render() {
         const g = el('input', { type: 'number', min: '5', max: '60', value: String(c.weekly_goal) });
         const col = el('input', { type: 'color', value: c.color, style: 'padding:2px;height:44px' });
         return el('tr', {},
-          el('td', { 'data-th': 'Prénom' }, el('strong', {}, c.first_name)),
+          el('td', { 'data-th': 'Prénom' }, personLabel(c.first_name, { size: 'sm' })),
           el('td', { 'data-th': 'Naissance' }, b),
           el('td', { 'data-th': 'Objectif' }, g),
           el('td', { 'data-th': 'Couleur' }, col),

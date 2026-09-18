@@ -4,7 +4,7 @@
 // Le journal reste append-only : annuler ajoute une écriture inverse.
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, toast, fail, modal } from './ui.js';
+import { el, pts, toast, fail, modal, avatar, personLabel } from './ui.js';
 
 let root = null;
 let events = [], daily = [], cats = [], children = [];
@@ -103,7 +103,7 @@ function renderChildFilter() {
       class: 'journal-filter-btn' + (filter === c.id ? ' on' : ''),
       style: filter === c.id ? `--filter-color:${c.color}` : '',
       onclick: () => { filter = c.id; render(); }
-    }, c.first_name)));
+    }, personLabel(c.first_name, { size: 'sm' })));
 }
 
 function renderPeriodNav(label, previous, next, nextDisabled = false) {
@@ -131,7 +131,7 @@ function renderCalendar() {
       const has = stats.entries > 0;
       const cls = 'journal-day-score ' + (has ? (stats.score > 0 ? 'positive' : 'zero') : 'empty');
       return el('div', { class: cls, title: c.first_name + ' : ' + stats.score + ' point' + (stats.score > 1 ? 's' : '') },
-        el('span', { class: 'journal-day-initial', style: `background:${c.color}` }, c.first_name.slice(0, 1)),
+        avatar(c.first_name, { size: 'xs', title: c.first_name }),
         el('strong', {}, has ? String(stats.score) : '·'));
     });
     const isToday = day === api.todayISO();
@@ -163,7 +163,7 @@ function renderToday() {
 
   const summaries = rows.map(({ child: c, stats }) => el('div', { class: 'journal-summary', style: `--kid:${c.color}` },
     el('div', { class: 'journal-summary-top' },
-      el('strong', {}, c.first_name),
+      personLabel(c.first_name, { size: 'sm' }),
       el('span', { class: 'journal-summary-score' }, String(stats.score) + ' pt' + (stats.score > 1 ? 's' : ''))),
     el('div', { class: 'journal-summary-metrics' },
       el('span', {}, '+' + stats.gained),
@@ -187,8 +187,7 @@ function entry(e, isReversed, isRepaired) {
   const k = cat(e.category_id);
   const parent = k.parent_id ? cat(k.parent_id).label : null;
   const cls = e.kind === 'repair' ? 'rep' : e.points > 0 ? 'pos' : e.points < 0 ? 'neg' : 'muted';
-  const meta = [c ? c.first_name : 'Famille', parent, api.dayPartLabel(e.day_part), e.note]
-    .filter(Boolean).join(' · ');
+  const meta = [parent, api.dayPartLabel(e.day_part), e.note].filter(Boolean).join(' · ');
   const actions = [];
   if (!isReversed && e.kind !== 'reversal' && e.kind !== 'reward') {
     actions.push(el('button', { class: 'btn btn-sm', onclick: () => {
@@ -210,7 +209,7 @@ function entry(e, isReversed, isRepaired) {
     }}, 'Réparé'));
   }
   return el('div', { class: 'entry' + (isReversed ? ' cancelled' : '') },
-    el('span', { class: 'entry-dot', style: 'background:' + (c ? c.color : 'var(--muted)') }),
+    c ? avatar(c.first_name, { size: 'xs' }) : el('span', { class: 'entry-dot', style: 'background:var(--muted)' }),
     el('div', { class: 'entry-main' },
       el('div', { class: 'entry-cat' }, k.label || (e.kind === 'reward' ? (e.note || 'Échange') : 'Écriture'),
         isRepaired ? el('span', { class: 'muted' }, ' · réparé') : null),
@@ -226,7 +225,7 @@ function openDay(day) {
   const body = el('div', {},
     el('div', { class: 'journal-modal-summaries' }, ...rows.map(({ child: c, stats }) =>
       el('div', { class: 'journal-modal-summary', style: `--kid:${c.color}` },
-        el('strong', {}, c.first_name), el('b', {}, stats.score + ' pts'),
+        personLabel(c.first_name, { size: 'sm' }), el('b', {}, stats.score + ' pts'),
         el('span', {}, '+' + stats.gained + ' · −' + stats.lost + (stats.spent ? ' · dépensé ' + stats.spent : ''))))),
     list.length ? el('div', { class: 'journal-events' }, ...list.map(e => entry(e, flags.reversed.has(e.id), flags.repaired.has(e.id))))
       : el('p', { class: 'muted' }, 'Aucune écriture cette journée.'));

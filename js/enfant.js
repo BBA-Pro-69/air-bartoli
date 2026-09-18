@@ -4,7 +4,7 @@
 //  recompense, et AUCUNE comparaison entre les deux freres.
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, toast, fail, modal, gauge } from './ui.js';
+import { el, pts, toast, fail, modal, gauge, personLabel } from './ui.js';
 
 let root = null;
 let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], current = null;
@@ -38,11 +38,12 @@ function render() {
     ...children.map(k => el('button', {
       class: 'chip' + (k.id === current ? ' on' : ''),
       onclick: () => { current = k.id; render(); }
-    }, k.first_name))));
+    }, personLabel(k.first_name, { size: 'sm' }))));
 
   // --- bandeau : solde, niveau, distance au niveau suivant
   const next = lv.next_level_points;
   app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046)` },
+    el('div', { class: 'hero-person' }, personLabel(c.first_name, { size: 'lg' })),
     el('div', { class: 'badge' }, lv.level_label || 'Décollage'),
     el('div', { class: 'hero-balance', style: 'margin-top:8px' }, String(b)),
     el('div', { class: 'hero-sub' }, 'points à dépenser'),
@@ -106,7 +107,7 @@ function collectiveCard(r) {
       ' · minimum ' + r.min_per_child + ' par personne'),
     el('div', { class: 'eta' },
       ...children.map(c => el('div', {},
-        c.first_name + ' : ' + bal(c.id) +
+        personLabel(c.first_name, { size: 'xs' }), ' : ' + bal(c.id) +
         (bal(c.id) >= r.min_per_child ? ' ✓' : ' (il manque ' + (r.min_per_child - bal(c.id)) + ')')))),
     ok ? el('button', {
       class: 'btn btn-primary btn-sm', style: 'margin-top:10px',
@@ -137,7 +138,7 @@ function splitModal(r) {
   somme();
   const body = el('div', {},
     el('div', { class: 'fields' },
-      ...children.map((c, i) => el('div', { class: 'field' }, el('label', {}, c.first_name), inputs[i]))),
+      ...children.map((c, i) => el('div', { class: 'field' }, el('label', {}, personLabel(c.first_name, { size: 'xs' })), inputs[i]))),
     tot);
   modal(r.label, body, [{
     label: 'Envoyer la demande', class: 'btn-primary',

@@ -588,3 +588,47 @@ body.menu-open{overflow:hidden}
   .journal-summary-grid{grid-template-columns:1fr}
   .daypart-card{min-height:58px}
 }
+
+/* =====================================================================
+   Avatars familiaux
+   Images versionnées dans assets/, utilisées partout où une personne est
+   affichée pour rendre l'application plus chaleureuse et immédiatement
+   lisible par les enfants.
+   ===================================================================== */
+.person-label{display:inline-flex;align-items:center;gap:7px;min-width:0;vertical-align:middle}
+.person-label>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person-avatar{display:block;flex:none;width:36px;height:36px;object-fit:cover;border-radius:50%;
+  border:2px solid rgba(255,255,255,.75);background:#e2e8f0;box-shadow:0 2px 5px rgba(15,23,42,.14)}
+.person-avatar-xs{width:24px;height:24px;border-width:1.5px}
+.person-avatar-sm{width:32px;height:32px}
+.person-avatar-md{width:46px;height:46px}
+.person-avatar-lg{width:64px;height:64px;border-width:3px;box-shadow:0 5px 14px rgba(15,23,42,.22)}
+.kid-name .person-label{max-width:100%}
+.kid-name .person-avatar{border-color:var(--kid,var(--line))}
+.appbar-user{display:inline-flex;align-items:center;gap:7px}
+.appbar-user .person-avatar{border-color:rgba(255,255,255,.6)}
+.who button{display:flex;align-items:center;justify-content:center;gap:9px}
+.who button .person-avatar{border-color:var(--line)}
+.who button.on .person-avatar{border-color:var(--cyan)}
+.hero-person{display:flex;align-items:center;margin-bottom:10px}
+.hero-person .person-label{font-size:1.05rem;font-weight:800}
+.hero-person .person-label>span:last-child{font-size:1.05rem}
+.hero .person-avatar{border-color:rgba(255,255,255,.8)}
+.journal-filter-btn .person-label{gap:5px}
+.journal-filter-btn .person-avatar{width:22px;height:22px}
+.journal-filter-btn{display:inline-flex;align-items:center;gap:5px}
+.journal-day-score .person-avatar{width:16px;height:16px;border:0;box-shadow:none}
+.journal-summary-top .person-label{font-weight:800}
+.journal-summary-top .person-avatar{width:28px;height:28px}
+.journal-modal-summary .person-label{font-weight:800}
+.entry>.person-avatar{margin-top:1px;border-color:var(--line)}
+.legend-person{display:inline-flex;align-items:center;gap:5px}
+.legend-person .person-avatar{width:22px;height:22px;border-width:1px}
+
+@media (max-width:760px){
+  .appbar-user{max-width:9rem;padding:6px 9px}
+  .appbar-user .person-avatar{width:27px;height:27px}
+  .person-avatar-lg{width:56px;height:56px}
+  .hero-person .person-label>span:last-child{font-size:.98rem}
+  .journal-summary-top .person-label>span:last-child{max-width:7rem}
+}

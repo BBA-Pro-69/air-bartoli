@@ -4,7 +4,7 @@
 //  Il n'y a pas de bouton "valider" : l'appui sur une tuile ecrit.
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, toast, fail, undoBar, modal } from './ui.js';
+import { el, pts, toast, fail, undoBar, modal, personLabel } from './ui.js';
 import { celebrate, celebrateMilestone } from './cinematics.js';
 
 let root = null;
@@ -36,7 +36,7 @@ function renderKids() {
       style: `--kid:${c.color}`,
       onclick: () => { state.child = c.id; renderKids(); renderTiles(); }
     },
-      el('div', { class: 'kid-name' }, c.first_name),
+      el('div', { class: 'kid-name' }, personLabel(c.first_name, { size: 'sm' })),
       el('div', { class: 'kid-balance', style: `color:${c.color}` }, String(bal(c.id))),
       el('div', { class: 'kid-level' },
         (lv.level_label || 'Décollage') + ' · ' + (lv.status_points || 0) + ' miles')));

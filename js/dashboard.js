@@ -5,7 +5,7 @@
 //  "tu n'ecoutes jamais".
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, fail, divergingBars, lineChart } from './ui.js';
+import { el, pts, fail, divergingBars, lineChart, personLabel } from './ui.js';
 
 let root = null;
 let children = [], profile = [], daily = [], levels = [], rates = [];
@@ -44,7 +44,7 @@ function render() {
         ...children.map(c => el('button', {
           class: 'chip' + (enfant === c.id ? ' on' : ''),
           onclick: () => { enfant = c.id; render(); }
-        }, c.first_name)))));
+        }, personLabel(c.first_name, { size: 'sm' })))));
 
   const p = profile.filter(r => !enfant || r.child_id === enfant);
 
@@ -56,7 +56,7 @@ function render() {
         const lv = levels.find(l => l.child_id === c.id) || {};
         const rt = (rates.find(r => r.child_id === c.id) || {}).weekly_rate || 0;
         return el('div', { style: `border-left:4px solid ${c.color};padding-left:12px` },
-          el('div', { style: 'font-weight:700' }, c.first_name),
+          el('div', { style: 'font-weight:700' }, personLabel(c.first_name, { size: 'sm' })),
           el('div', { class: 'muted' },
             (lv.level_label || 'Décollage') + ' · ' + (lv.status_points || 0) + ' miles de statut'),
           el('div', { class: 'muted' }, 'Rythme : ' + rt + ' pts/semaine' +
@@ -114,7 +114,7 @@ function render() {
     el('h2', {}, 'Évolution du solde'),
     lineChart(series),
     el('div', { class: 'legend' },
-      ...series.map(s => el('span', {}, el('i', { style: 'background:' + s.color }), s.label)))));
+      ...series.map(s => el('span', { class: 'legend-person' }, el('i', { style: 'background:' + s.color }), personLabel(s.label, { size: 'xs' }))))));
 }
 
 async function reload() {

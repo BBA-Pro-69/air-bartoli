@@ -86,3 +86,8 @@ Les anciennes catégories dites système ne sont plus bloquées dans l'interface
 Le module `historique.js` a été refondu autour de deux vues : calendrier mensuel et Aujourd'hui. Les données sont chargées par plage via `getDailyRange` et `getEventsRange`. Le score affiché par jour est plafonné à zéro après gains et malus, tandis que les événements réels restent visibles dans le détail.
 
 Dans `saisie.js`, les sélecteurs de moment et de grande catégorie sont des grilles tactiles, sans défilement horizontal. Le cache PWA passe à `2026-09-18c`.
+
+
+## 19 septembre 2026 : avatars familiaux
+
+Les avatars `avatar_Keyran.png`, `avatar_Rilès.png`, `avatar_Bruno.png` et `avatar_Névine.png` sont maintenant utilisés par le front dans la connexion, la barre haute, la saisie, l’écran Enfants, le Journal, l’Analyse et les Réglages. Le cache PWA passe à `2026-09-19a` et inclut les quatre images.

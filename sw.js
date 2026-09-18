@@ -2,7 +2,7 @@
    Même choix que Chicago-Bruno-Chris : cache versionné, réseau d'abord,
    repli sur le shell si le réseau est lent ou absent. Les appels Supabase
    ne sont pas mis en cache : les points doivent toujours venir de la base. */
-const VERSION = '2026-09-18d';
+const VERSION = '2026-09-19a';
 const SHELL = 'air-bartoli-shell-' + VERSION;
 const VENDOR = 'air-bartoli-vendor-' + VERSION;
 const PATIENCE = 1200;
@@ -13,7 +13,8 @@ const SHELL_URLS = [
   './js/login.js', './js/saisie.js', './js/enfant.js', './js/historique.js',
   './js/dashboard.js', './js/reglages.js', './js/cinematics.js', './js/pwa.js',
   './assets/icon-192.png', './assets/icon-512.png', './assets/icon-maskable-512.png',
-  './assets/apple-touch-icon-180.png'
+  './assets/apple-touch-icon-180.png', './assets/avatar_Keyran.png', './assets/avatar_Rilès.png',
+  './assets/avatar_Bruno.png', './assets/avatar_Névine.png'
 ];
 
 self.addEventListener('install', event => {

@@ -5,7 +5,7 @@
 //  horizontal fait défiler les vues, la barre basse les sélectionne.
 // =====================================================================
 import { requireSession, signOut, getCinematicSettings } from './api.js';
-import { toast, fail } from './ui.js';
+import { toast, fail, avatar } from './ui.js';
 import { initPWA, checkForUpdates, syncInstallUI, vibrate, isStandalone } from './pwa.js';
 import { initTouchFeedback, setCinematicThresholds } from './cinematics.js';
 import * as saisie from './saisie.js';
@@ -130,7 +130,8 @@ function closeMenu() {
   // les valeurs historiques de cinematics.js restent utilisées.
   try { setCinematicThresholds(await getCinematicSettings()); } catch (_) {}
 
-  byId('userName').textContent = me.display_name;
+  byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs' }), document.createElement('span'));
+  byId('userName').lastElementChild.textContent = me.display_name;
   byId('appShell').hidden = false;
   byId('bootScreen').remove();
 

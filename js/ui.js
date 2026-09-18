@@ -4,6 +4,44 @@
 export const $  = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
+
+const PERSON_AVATARS = {
+  keyran: './assets/avatar_Keyran.png',
+  riles: './assets/avatar_Rilès.png',
+  bruno: './assets/avatar_Bruno.png',
+  papa: './assets/avatar_Bruno.png',
+  nevine: './assets/avatar_Névine.png',
+  maman: './assets/avatar_Névine.png'
+};
+
+function personKey(name = '') {
+  return String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+export function avatarSrc(name = '') {
+  const key = personKey(name);
+  if (PERSON_AVATARS[key]) return PERSON_AVATARS[key];
+  const alias = Object.keys(PERSON_AVATARS).find(x => key.startsWith(x + ' ') || key.includes(x));
+  return alias ? PERSON_AVATARS[alias] : '';
+}
+
+export function avatar(name, { size = 'md', className = '', title = name } = {}) {
+  const src = avatarSrc(name);
+  if (!src) return el('span', { class: `person-avatar person-avatar-${size} ${className}`.trim(), 'aria-hidden': 'true' });
+  return el('img', {
+    class: `person-avatar person-avatar-${size} ${className}`.trim(),
+    src,
+    alt: title || name,
+    title: title || name,
+    loading: 'lazy',
+    decoding: 'async'
+  });
+}
+
+export function personLabel(name, options = {}) {
+  return el('span', { class: 'person-label' }, avatar(name, options), el('span', {}, name));
+}
+
 export function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
