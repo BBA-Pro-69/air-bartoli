@@ -397,3 +397,15 @@ Depuis **Réglages → Catégories et barème**, chaque grande catégorie et cha
 La suppression est sûre pour le journal append-only : si une catégorie n'a jamais été utilisée, elle est supprimée physiquement. Si elle apparaît déjà dans l'historique, elle est retirée des menus et désactivée, mais les anciennes écritures restent intactes et consultables. Les catégories peuvent ensuite être recréées librement avec les libellés et sous-catégories souhaités.
 
 Le bonus hebdomadaire reste fonctionnel même si la catégorie technique de régularité est renommée ou retirée.
+
+
+## Journal calendrier et saisie mobile
+
+Le **Journal** est organisé en deux vues :
+
+- **Calendrier** : une grille mensuelle affiche le score pédagogique de chaque enfant, jour par jour. Une case vide indique qu'aucune écriture n'a été faite. Un appui sur une journée ouvre un panneau de détail avec les écritures enfant par enfant.
+- **Aujourd'hui** : deux cartes résument le score du jour, les gains, les malus et les points dépensés, puis la chronologie des écritures. Un filtre permet d'afficher les deux enfants ou un seul.
+
+Le score pédagogique du jour est `max(gains - malus, 0)`. Les dépenses de récompenses ne le diminuent pas. Le journal conserve toutefois les mouvements réels, pour que le parent puisse comprendre ce qui s'est passé. Le solde cumulatif et les miles de statut ne sont pas remplacés par ce score quotidien.
+
+Sur la **Saisie**, les moments de la journée et les grandes catégories sont maintenant des grilles tactiles. Ils ne défilent plus horizontalement sur téléphone.

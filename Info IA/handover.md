@@ -182,3 +182,12 @@ La migration `06-cinematic-settings.sql` ajoute `cinematic_settings`, par famill
 ## Dernière évolution : autonomie sur les catégories
 
 `07-category-autonomy.sql` expose `delete_category(uuid)`. La fonction supprime une catégorie et ses sous-catégories si aucun événement ne les référence. Sinon, elle les désactive pour conserver l'historique. Le front affiche un bouton **Supprimer** dans le formulaire de chaque catégorie. Les anciens garde-fous de nommage des catégories système ont été retirés.
+
+
+## Dernière évolution : journal et saisie mobile
+
+Le journal ne rend plus une longue liste unique. `historique.js` propose un calendrier mensuel avec scores enfant par enfant, un filtre de fratrie, et un panneau de détail tactile par journée. La vue Aujourd'hui présente le score, les gains, les malus, les dépenses et les écritures de chaque enfant.
+
+Le score quotidien affiché est `max(gained + lost, 0)`, avec `lost` négatif dans `v_daily`. Les récompenses dépensées sont exclues de ce score pédagogique. Le ledger Supabase reste inchangé.
+
+La saisie utilise `daypart-grid` et `category-root-grid` pour éviter les chips horizontales sur téléphone.

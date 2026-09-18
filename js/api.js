@@ -103,10 +103,24 @@ export const getProfile    = () => rows(sb.from('v_category_profile').select('*'
 
 export const getEvents = (limit = 120) => rows(
   sb.from('events')
-    .select('*, categories(label, parent_id), children(first_name, color)')
+    .select('*, categories(label, parent_id, repairable), children(first_name, color)')
     .order('event_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit));
+
+export const getDailyRange = (from, to) => rows(
+  sb.from('v_daily').select('*').gte('event_date', from).lte('event_date', to)
+    .order('event_date').order('child_id'));
+
+export const getEventsRange = (from, to, childId = null) => {
+  let q = sb.from('events')
+    .select('*, categories(label, parent_id, repairable), children(first_name, color)')
+    .gte('event_date', from).lte('event_date', to)
+    .order('event_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (childId) q = q.eq('child_id', childId);
+  return rows(q);
+};
 
 export const getPendingRedemptions = () => rows(
   sb.from('redemptions')

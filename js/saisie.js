@@ -46,17 +46,21 @@ function renderKids() {
 function renderChips() {
   const dp = $('#dayparts'); dp.innerHTML = '';
   api.DAY_PARTS.forEach(p => dp.append(el('button', {
-    class: 'chip' + (state.dayPart === p.code ? ' on' : ''),
+    class: 'daypart-card' + (state.dayPart === p.code ? ' on' : ''),
     onclick: () => { state.dayPart = p.code; renderChips(); }
-  }, p.label)));
+  },
+    el('span', { class: 'daypart-icon' }, ({ matin: '☀️', ecole: '📚', midi: '🍽️', gouter: '🍎', soir: '🌙', nuit: '✨' })[p.code] || '•'),
+    el('span', { class: 'daypart-label' }, p.label))));
 
   const rt = $('#roots'); rt.innerHTML = '';
   roots().forEach(r => {
     if (!subs(r.id).length) return;              // les racines sans enfant sont des raccourcis
     rt.append(el('button', {
-      class: 'chip' + (state.root === r.id ? ' on' : ''),
+      class: 'category-root-card' + (state.root === r.id ? ' on' : ''),
       onclick: () => { state.root = r.id; renderChips(); renderTiles(); }
-    }, r.label));
+    },
+      el('strong', {}, r.label),
+      el('span', {}, subs(r.id).length + ' choix')));
   });
 }
 
@@ -67,7 +71,7 @@ function renderTiles() {
   list.forEach(c => box.append(tile(c)));
 
   const shortcuts = $('#shortcuts'); shortcuts.innerHTML = '';
-  roots().filter(r => !subs(r.id).length && r.label !== 'Ajustement')
+  roots().filter(r => !subs(r.id).length)
     .forEach(r => shortcuts.append(tile(r, true)));
 }
 
@@ -168,7 +172,7 @@ export async function mount(container) {
           type: 'date', id: 'date', value: state.date, max: state.date,
           style: 'width:auto', onchange: e => { state.date = e.target.value; }
         })),
-      el('div', { class: 'chips', id: 'dayparts' })),
+      el('div', { class: 'daypart-grid', id: 'dayparts' })),
     el('div', { class: 'card' },
       el('div', { class: 'row', style: 'margin-bottom:10px' },
         el('h2', { style: 'margin:0' }, 'Quoi ?'),
@@ -178,12 +182,12 @@ export async function mount(container) {
             type: 'checkbox', style: 'width:auto;min-height:auto',
             onchange: e => { state.withNote = e.target.checked; }
           }), 'Ajouter une note')),
-      el('div', { class: 'chips', id: 'roots', style: 'margin-bottom:12px' }),
-      el('div', { class: 'tiles', id: 'tiles' })),
+      el('div', { class: 'category-root-grid', id: 'roots', style: 'margin-bottom:12px' }),
+      el('div', { class: 'tiles category-tile-grid', id: 'tiles' })),
     el('div', { class: 'card' },
       el('h2', {}, 'Raccourcis'),
       el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Le geste remarquable et le bonus de régularité, à points libres.'),
+        'Des raccourcis rapides, à points libres.'),
       el('div', { class: 'tiles', id: 'shortcuts' })),
     el('div', { class: 'card', style: 'display:none' },
       el('h2', {}, 'Échanges à valider'), el('div', { id: 'pending' })));

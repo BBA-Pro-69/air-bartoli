@@ -1,24 +1,23 @@
 AIR BARTOLI PACKAGE MARKER
 ==========================
-Package: Air-Bartoli v3.2
-Created: 2026-09-18 15:49:25 Europe/Paris
-Archive: Air-Bartoli-v3.2-20260918-154925.zip
-PWA cache version: 2026-09-18b
-Supabase migration: 07-category-autonomy.sql
+Package: Air-Bartoli v3.3
+Created: 2026-09-18 17:17:02 Europe/Paris
+Archive: Air-Bartoli-v3.3-20260918-171702.zip
+PWA cache version: 2026-09-18c
 
-New feature:
-- Administration > Réglages > Catégories et barème
-- Modify, rename, delete and recreate root categories
-- Modify, rename, delete and recreate subcategories
-- Deleting a root category also targets its subcategories
-- Used categories are removed from menus while history is preserved
-- Unused categories are physically deleted
-- No category name is technically locked in the interface
+New ergonomics:
+- Journal split into Calendrier and Aujourd’hui
+- Monthly calendar with one score per child per day
+- Child filter, previous/next period and tactile day detail sheet
+- Today view with score, gains, maluses, spending and timeline
+- Daily educational score: max(gains - maluses, 0)
+- Horizontal chips replaced by mobile grids for day parts and root categories
+- Range queries for daily summaries and event details
 
 Distinctive checks:
-- js/reglages.js contains the Supprimer action
-- js/api.js contains deleteCategory
-- sql/07-category-autonomy.sql exists
-- sw.js contains VERSION = '2026-09-18b'
+- js/historique.js contains the calendar and Aujourd’hui views
+- js/saisie.js contains daypart-grid and category-root-grid
+- js/api.js contains getDailyRange and getEventsRange
+- sw.js contains VERSION = '2026-09-18c'
 
 This marker is included only to make the intended upload unambiguous.

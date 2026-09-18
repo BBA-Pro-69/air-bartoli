@@ -154,3 +154,17 @@ n'a jamais servi, elle est supprimee physiquement. Les anciennes categories
 techniques ne sont plus bloquees dans l'interface.
 
 Migration Supabase : 07-category-autonomy.sql. Cache PWA : 2026-09-18b.
+
+
+----------------------------------------------------------------------
+Journal calendrier et ergonomie mobile
+----------------------------------------------------------------------
+Refonte du journal autour d'une grille mensuelle inspirée de
+Santiago-performances, avec scores enfant par enfant, filtre fratrie et
+detail tactile d'une journee. Ajout d'une vue Aujourd'hui montrant le score
+du jour, les gains, les malus, les depenses et la chronologie des ecritures.
+Le score pedagogique est plafonne a zero et ne tient pas compte des achats.
+
+Les moments de la journee et les grandes categories de la saisie passent en
+grilles tactiles, sans defilement horizontal. Nouvelles requetes par plage
+getDailyRange et getEventsRange. Cache PWA : 2026-09-18c.

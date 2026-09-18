@@ -71,7 +71,7 @@ supprimés.
 
 La table `cinematic_settings` a été ajoutée dans Supabase. Elle contient une ligne par famille avec les trois seuils `level_1_min`, `level_2_min` et `level_3_min`, initialisés à 1, 5 et 16. La RLS limite lecture et écriture aux parents de la famille.
 
-La carte **Cinématiques de récompense** est disponible dans **Réglages**. Les seuils s’appliquent aux points positifs gagnés lors d’une seule saisie. Le cache PWA passe à `2026-09-18b`.
+La carte **Cinématiques de récompense** est disponible dans **Réglages**. Les seuils s’appliquent aux points positifs gagnés lors d’une seule saisie. Le cache PWA passe à `2026-09-18c`.
 
 
 ## 18 septembre 2026 : autonomie sur les catégories
@@ -79,3 +79,10 @@ La carte **Cinématiques de récompense** est disponible dans **Réglages**. Les
 La migration `07-category-autonomy.sql` ajoute la fonction `delete_category`. Depuis Réglages, les parents peuvent modifier, renommer et supprimer les grandes catégories comme les sous-catégories. Une catégorie jamais utilisée est supprimée physiquement. Une catégorie déjà présente dans le journal est désactivée et retirée des menus, afin de préserver l'historique append-only.
 
 Les anciennes catégories dites système ne sont plus bloquées dans l'interface. Le bonus hebdomadaire n'échoue plus si la catégorie de régularité est renommée ou retirée.
+
+
+## 18 septembre 2026 : journal calendrier et grilles mobiles
+
+Le module `historique.js` a été refondu autour de deux vues : calendrier mensuel et Aujourd'hui. Les données sont chargées par plage via `getDailyRange` et `getEventsRange`. Le score affiché par jour est plafonné à zéro après gains et malus, tandis que les événements réels restent visibles dans le détail.
+
+Dans `saisie.js`, les sélecteurs de moment et de grande catégorie sont des grilles tactiles, sans défilement horizontal. Le cache PWA passe à `2026-09-18c`.
