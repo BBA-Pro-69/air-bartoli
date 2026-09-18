@@ -31,6 +31,20 @@ const byId = id => document.getElementById(id);
 const viewNode = id => document.querySelector(`[data-view="${id}"]`);
 const indexOf = id => Math.max(0, VIEWS.findIndex(v => v.id === id));
 
+function showBootError(error) {
+  console.error('Air Bartoli boot failed', error);
+  const screen = byId('bootScreen');
+  if (!screen || screen.dataset.errorShown) return;
+  screen.dataset.errorShown = 'true';
+  screen.classList.add('boot-failed');
+  const message = error?.message || String(error);
+  const label = screen.querySelector('p');
+  if (label) label.textContent = 'Impossible de démarrer';
+  screen.append(document.createElement('small'));
+  screen.lastElementChild.className = 'boot-error-detail';
+  screen.lastElementChild.textContent = message;
+}
+
 // ---------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------
@@ -121,6 +135,7 @@ function closeMenu() {
 // Démarrage
 // ---------------------------------------------------------------------
 (async function boot() {
+  try {
   initPWA();
   initTouchFeedback();
   me = await requireSession();
@@ -191,4 +206,7 @@ function closeMenu() {
 
   const start = location.hash.replace('#', '') || 'saisie';
   await show(VIEWS.some(v => v.id === start) ? start : 'saisie');
+  } catch (error) {
+    showBootError(error);
+  }
 })();

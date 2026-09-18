@@ -632,3 +632,7 @@ body.menu-open{overflow:hidden}
   .hero-person .person-label>span:last-child{font-size:.98rem}
   .journal-summary-top .person-label>span:last-child{max-width:7rem}
 }
+
+
+.boot-failed{padding:24px;max-width:min(620px,90vw);text-align:center}
+.boot-error-detail{display:block;margin-top:10px;color:#fecaca;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
