@@ -40,6 +40,7 @@ Air-Bartoli/
 │   ├── 04-views-security-invoker.sql  les vues respectent la RLS
 │   ├── 05-hardening.sql        search_path et retrait des droits du rôle anon
 │   ├── 06-cinematic-settings.sql seuils des effets, par famille
+│   ├── 07-category-autonomy.sql suppression sûre des catégories
 │   └── 99-parents-bootstrap.sql rattachement des comptes parents
 ├── Info IA/
 │   ├── handover.md          architecture, décisions, pièges (source unique)
@@ -74,7 +75,7 @@ Air-Bartoli/
 | Étape | État |
 |---|---|
 | Projet Supabase `air-bartoli` (`dgsvpxeqwdyeudqubayd`), région Paris | **fait** |
-| Migrations 01 à 06 appliquées | **fait** |
+| Migrations 01 à 07 appliquées | **fait** |
 | Catégories, niveaux et catalogue chargés | **fait** |
 | Recette fonctionnelle, 21 scénarios | **fait, tous verts** |
 | `js/config.js` renseigné | **fait** |
@@ -387,3 +388,12 @@ depuis. Tous verts :
 Dans le menu **Réglages**, la carte **Cinématiques de récompense** permet de choisir les trois seuils : retour discret, pluie de particules et feu d’artifice. Les valeurs doivent être des entiers strictement croissants. Le réglage est enregistré dans `cinematic_settings`, une ligne par famille, avec RLS. Il est donc partagé entre les téléphones de Bruno et Névine.
 
 Les seuils portent sur le nombre de points positifs réellement retournés par une saisie. Un malus ne déclenche jamais de célébration.
+
+
+## Autonomie sur les catégories
+
+Depuis **Réglages → Catégories et barème**, chaque grande catégorie et chaque sous-catégorie peut être modifiée, renommée ou supprimée. Une grande catégorie peut être supprimée avec toutes ses sous-catégories.
+
+La suppression est sûre pour le journal append-only : si une catégorie n'a jamais été utilisée, elle est supprimée physiquement. Si elle apparaît déjà dans l'historique, elle est retirée des menus et désactivée, mais les anciennes écritures restent intactes et consultables. Les catégories peuvent ensuite être recréées librement avec les libellés et sous-catégories souhaités.
+
+Le bonus hebdomadaire reste fonctionnel même si la catégorie technique de régularité est renommée ou retirée.

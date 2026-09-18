@@ -131,6 +131,7 @@ export const requestRedemption = (reward_id, shares) =>
   rpc('request_redemption', { p_reward_id: reward_id, p_shares: shares });
 export const approveRedemption = (id) => rpc('approve_redemption', { p_redemption_id: id });
 export const grantWeeklyStreak = (weekStart) => rpc('grant_weekly_streak', { p_week_start: weekStart });
+export const deleteCategory = (category_id) => rpc('delete_category', { p_category_id: category_id });
 
 // Tables de parametrage : ecriture directe autorisee par la RLS.
 export async function save(table, row) {

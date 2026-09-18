@@ -1,24 +1,24 @@
 AIR BARTOLI PACKAGE MARKER
 ==========================
-Package: Air-Bartoli v3.1
-Created: 2026-09-18 00:11:23 Europe/Paris
-Archive: Air-Bartoli-v3.1-20260918-001123.zip
-PWA cache version: 2026-09-18a
-Supabase migration: 06-cinematic-settings.sql
+Package: Air-Bartoli v3.2
+Created: 2026-09-18 15:49:25 Europe/Paris
+Archive: Air-Bartoli-v3.2-20260918-154925.zip
+PWA cache version: 2026-09-18b
+Supabase migration: 07-category-autonomy.sql
 
 New feature:
-- Administration > Réglages > Cinématiques de récompense
-- Three configurable thresholds, strictly increasing
-- Thresholds apply to points won during one entry
-- Defaults: 1, 5, 16
-- Settings are stored per family in Supabase
+- Administration > Réglages > Catégories et barème
+- Modify, rename, delete and recreate root categories
+- Modify, rename, delete and recreate subcategories
+- Deleting a root category also targets its subcategories
+- Used categories are removed from menus while history is preserved
+- Unused categories are physically deleted
+- No category name is technically locked in the interface
 
 Distinctive checks:
-- index.html contains data-view="reglages"
-- js/app.js loads cinematic settings at startup
-- js/cinematics.js contains setCinematicThresholds
-- js/reglages.js contains "Cinématiques de récompense"
-- sql/06-cinematic-settings.sql exists
-- sw.js contains VERSION = '2026-09-18a'
+- js/reglages.js contains the Supprimer action
+- js/api.js contains deleteCategory
+- sql/07-category-autonomy.sql exists
+- sw.js contains VERSION = '2026-09-18b'
 
 This marker is included only to make the intended upload unambiguous.

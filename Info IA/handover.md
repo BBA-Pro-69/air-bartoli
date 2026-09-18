@@ -177,3 +177,8 @@ et Installation dans Menu.
 ## Dernière évolution : seuils de cinématiques
 
 La migration `06-cinematic-settings.sql` ajoute `cinematic_settings`, par famille. Le front charge ces valeurs au démarrage dans `app.js`, puis les applique dans `cinematics.js`. La page Réglages permet de modifier les trois seuils, qui doivent rester strictement croissants. Les valeurs par défaut et de secours sont 1, 5 et 16.
+
+
+## Dernière évolution : autonomie sur les catégories
+
+`07-category-autonomy.sql` expose `delete_category(uuid)`. La fonction supprime une catégorie et ses sous-catégories si aucun événement ne les référence. Sinon, elle les désactive pour conserver l'historique. Le front affiche un bouton **Supprimer** dans le formulaire de chaque catégorie. Les anciens garde-fous de nommage des catégories système ont été retirés.

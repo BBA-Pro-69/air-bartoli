@@ -141,3 +141,16 @@ célébration. Valeurs par défaut : 1, 5 et 16.
 
 Le front charge ces valeurs depuis Supabase au démarrage. La version du cache
 PWA est 2026-09-18a.
+
+
+----------------------------------------------------------------------
+Autonomie complete sur les categories
+----------------------------------------------------------------------
+Les grandes categories et les sous-categories peuvent maintenant etre
+modifiees, renommees, supprimees et recreees depuis Reglages. Une grande
+categorie supprimee emporte ses sous-categories. Si une categorie a deja
+servi, elle est retiree des menus mais son historique est conserve. Si elle
+n'a jamais servi, elle est supprimee physiquement. Les anciennes categories
+techniques ne sont plus bloquees dans l'interface.
+
+Migration Supabase : 07-category-autonomy.sql. Cache PWA : 2026-09-18b.

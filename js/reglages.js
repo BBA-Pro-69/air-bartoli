@@ -9,7 +9,6 @@ import { el, toast, fail, modal } from './ui.js';
 let root = null;
 let children = [], cats = [], rewards = [], special = [], cinematic = null, famille = null;
 const ETALON = 22;                      // points par semaine et par enfant
-const SYSTEME = ['Exceptionnel', 'Régularité', 'Ajustement'];
 
 const subs  = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
@@ -47,7 +46,11 @@ function formCategorie(cat, parentId) {
     el('p', { class: 'muted' },
       'Le barème ne change que pour les saisies à venir. Les points déjà donnés ne bougent pas.'));
 
-  modal(cat ? 'Modifier la catégorie' : 'Nouvelle catégorie', body, [{
+  // Une catégorie peut être supprimée depuis ce formulaire. Si elle a déjà
+  // servi, la base la retire des menus sans effacer le journal.
+
+
+  const actions = [{
     label: 'Enregistrer', class: 'btn-primary',
     onClick: async close => {
       try {
@@ -64,7 +67,23 @@ function formCategorie(cat, parentId) {
         close(); await reload(); toast('Catégorie enregistrée.');
       } catch (e) { fail(e); }
     }
-  }]);
+  }];
+  if (cat) actions.push({
+    label: 'Supprimer', class: 'btn-danger',
+    onClick: async close => {
+      const hasChildren = !cat.parent_id && subs(cat.id).length > 0;
+      const cible = hasChildren ? 'cette catégorie et toutes ses sous-catégories' : 'cette catégorie';
+      if (!window.confirm('Supprimer ' + cible + ' ?\n\nSi elle apparaît déjà dans l’historique, elle sera retirée des menus mais l’historique sera conservé.')) return;
+      try {
+        const mode = await api.deleteCategory(cat.id);
+        close(); await reload();
+        toast(mode === 'archived'
+          ? 'Catégorie retirée des menus. Historique conservé.'
+          : 'Catégorie supprimée.');
+      } catch (e) { fail(e); }
+    }
+  });
+  modal(cat ? 'Modifier la catégorie' : 'Nouvelle catégorie', body, actions);
 }
 
 function formRecompense(r) {
@@ -191,14 +210,12 @@ function render() {
       el('div', { class: 'spacer' }),
       el('button', { class: 'btn btn-sm', onclick: () => formCategorie(null, null) }, '+ Grande catégorie')));
   roots().forEach(r => {
-    const systeme = SYSTEME.includes(r.label);
     catBox.append(el('div', { style: 'margin-top:16px;padding-top:12px;border-top:1px solid var(--line)' },
       el('div', { class: 'row' },
         el('strong', {}, r.label),
-        systeme ? el('span', { class: 'muted' }, '· catégorie système, ne pas renommer') : null,
         el('div', { class: 'spacer' }),
         el('button', { class: 'btn btn-sm', onclick: () => formCategorie(r) }, 'Modifier'),
-        systeme ? null : el('button', { class: 'btn btn-sm', onclick: () => formCategorie(null, r.id) }, '+ Sous-catégorie')),
+        el('button', { class: 'btn btn-sm', onclick: () => formCategorie(null, r.id) }, '+ Sous-catégorie')),
       el('div', { class: 'tiles', style: 'margin-top:10px' },
         ...subs(r.id).map(s => el('button', {
           class: 'tile ' + (s.kind === 'malus' ? 'tile-malus' : 'tile-bonus'),
