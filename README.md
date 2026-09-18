@@ -41,6 +41,7 @@ Air-Bartoli/
 │   ├── 05-hardening.sql        search_path et retrait des droits du rôle anon
 │   ├── 06-cinematic-settings.sql seuils des effets, par famille
 │   ├── 07-category-autonomy.sql suppression sûre des catégories
+│   ├── 08-automatic-boosters.sql boosters de régularité
 │   └── 99-parents-bootstrap.sql rattachement des comptes parents
 ├── Info IA/
 │   ├── handover.md          architecture, décisions, pièges (source unique)
@@ -75,7 +76,7 @@ Air-Bartoli/
 | Étape | État |
 |---|---|
 | Projet Supabase `air-bartoli` (`dgsvpxeqwdyeudqubayd`), région Paris | **fait** |
-| Migrations 01 à 07 appliquées | **fait** |
+| Migrations 01 à 08 appliquées | **fait** |
 | Catégories, niveaux et catalogue chargés | **fait** |
 | Recette fonctionnelle, 21 scénarios | **fait, tous verts** |
 | `js/config.js` renseigné | **fait** |
@@ -409,3 +410,12 @@ Le **Journal** est organisé en deux vues :
 Le score pédagogique du jour est `max(gains - malus, 0)`. Les dépenses de récompenses ne le diminuent pas. Le journal conserve toutefois les mouvements réels, pour que le parent puisse comprendre ce qui s'est passé. Le solde cumulatif et les miles de statut ne sont pas remplacés par ce score quotidien.
 
 Sur la **Saisie**, les moments de la journée et les grandes catégories sont maintenant des grilles tactiles. Ils ne défilent plus horizontalement sur téléphone.
+
+
+## Score réel, score compté et boosters
+
+Dans la saisie, chaque enfant possède deux lectures de la journée. Le **résultat réel** peut être négatif, par exemple `-4`. Le **score compté** affiché en grand reste `0`, avec le message « encore 4 points pour revenir à zéro ». Les points suivants ne deviennent du score positif qu'après récupération de ce déficit.
+
+Le seuil d'un booster utilise la somme des scores comptés des journées de la période, sans inclure les anciens boosters. Les périodes actuellement disponibles sont une semaine calendaire et un mois calendaire. Depuis Réglages, le parent peut activer chaque période, définir le seuil entier et le coefficient à une décimale. Le déclenchement est immédiat dès que le seuil est atteint. Le booster est ajouté comme une entrée séparée, sans modifier les points des journées précédentes.
+
+Avec un score de période de 37 et un coefficient de `1,2`, le total théorique est `44,4`, arrondi à `45`, donc le booster ajouté vaut `8` points.

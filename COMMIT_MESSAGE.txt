@@ -168,3 +168,20 @@ Le score pedagogique est plafonne a zero et ne tient pas compte des achats.
 Les moments de la journee et les grandes categories de la saisie passent en
 grilles tactiles, sans defilement horizontal. Nouvelles requetes par plage
 getDailyRange et getEventsRange. Cache PWA : 2026-09-18c.
+
+
+----------------------------------------------------------------------
+Score reel et boosters automatiques de regularite
+----------------------------------------------------------------------
+La saisie affiche desormais le resultat reel de la journee, qui peut etre
+negatif, a cote du score compte, plafonne a zero. L'enfant voit combien de
+points il doit recuperer avant de recommencer a accumuler du score positif.
+
+Ajout d'une console de boosters automatiques dans Reglages, avec une regle
+par semaine calendaire et par mois calendaire. Chaque regle comporte un seuil
+entier et un coefficient a une decimale. Le booster est declenche des que le
+seuil est atteint, une seule fois par enfant et par periode, sous la forme
+d'une entree distincte. Les points du calendrier restent inchanges.
+
+Formule : ceil(score de la periode x coefficient) - score de la periode.
+Migration Supabase : 08-automatic-boosters.sql. Cache PWA : 2026-09-18d.

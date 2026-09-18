@@ -1,23 +1,31 @@
 AIR BARTOLI PACKAGE MARKER
 ==========================
-Package: Air-Bartoli v3.3
-Created: 2026-09-18 17:17:02 Europe/Paris
-Archive: Air-Bartoli-v3.3-20260918-171702.zip
-PWA cache version: 2026-09-18c
+Package: Air-Bartoli v3.4
+Created: 2026-09-18 18:04:50 Europe/Paris
+Archive: Air-Bartoli-v3.4-20260918-180450.zip
+PWA cache version: 2026-09-18d
+Supabase migration: 08-automatic-boosters.sql
 
-New ergonomics:
-- Journal split into Calendrier and Aujourd’hui
-- Monthly calendar with one score per child per day
-- Child filter, previous/next period and tactile day detail sheet
-- Today view with score, gains, maluses, spending and timeline
-- Daily educational score: max(gains - maluses, 0)
-- Horizontal chips replaced by mobile grids for day parts and root categories
-- Range queries for daily summaries and event details
+New feature:
+- True daily score can be negative in Saisie
+- Counted daily score is displayed separately and clamped to zero
+- Deficit needed to return to zero is shown explicitly
+- Weekly and monthly calendar regularity boosters
+- Thresholds and one-decimal coefficient configurable in Settings
+- Booster triggered once per child and period after each entry
+- Booster is a separate ledger entry, never retroactive on calendar days
+- Child screen shows progress toward active boosters
+- Journal shows boosters in a separate section
+
+Formula:
+ceil(period score * multiplier) - period score
+Period score uses daily scores with max(gains - maluses, 0), excluding boosters.
 
 Distinctive checks:
-- js/historique.js contains the calendar and Aujourd’hui views
-- js/saisie.js contains daypart-grid and category-root-grid
-- js/api.js contains getDailyRange and getEventsRange
-- sw.js contains VERSION = '2026-09-18c'
+- js/saisie.js contains daily-score-real and daily-score-main
+- js/reglages.js contains Boosters automatiques
+- js/enfant.js contains Tes prochains boosters
+- sql/08-automatic-boosters.sql exists
+- sw.js contains VERSION = '2026-09-18d'
 
 This marker is included only to make the intended upload unambiguous.
