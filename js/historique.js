@@ -103,7 +103,7 @@ function renderChildFilter() {
       class: 'journal-filter-btn' + (filter === c.id ? ' on' : ''),
       style: filter === c.id ? `--filter-color:${c.color}` : '',
       onclick: () => { filter = c.id; render(); }
-    }, personLabel(c.first_name, { size: 'sm' })));
+    }, personLabel(c.first_name, { size: 'sm' }))));
 }
 
 function renderPeriodNav(label, previous, next, nextDisabled = false) {

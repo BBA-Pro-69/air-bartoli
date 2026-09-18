@@ -2,14 +2,14 @@
    Même choix que Chicago-Bruno-Chris : cache versionné, réseau d'abord,
    repli sur le shell si le réseau est lent ou absent. Les appels Supabase
    ne sont pas mis en cache : les points doivent toujours venir de la base. */
-const VERSION = '2026-09-19b';
+const VERSION = '2026-09-19c';
 const SHELL = 'air-bartoli-shell-' + VERSION;
 const VENDOR = 'air-bartoli-vendor-' + VERSION;
 const PATIENCE = 1200;
 const SHELL_URLS = [
   './', './index.html', './login.html', './enfant.html', './historique.html',
   './dashboard.html', './reglages.html', './manifest.webmanifest', './robots.txt',
-  './css/app.css', './js/config.js', './js/api.js', './js/ui.js', './js/app.js',
+  './css/app.css', './css/avatars.css', './js/config.js', './js/api.js', './js/ui.js', './js/app.js',
   './js/login.js', './js/saisie.js', './js/enfant.js', './js/historique.js',
   './js/dashboard.js', './js/reglages.js', './js/cinematics.js', './js/pwa.js',
   './assets/icon-192.png', './assets/icon-512.png', './assets/icon-maskable-512.png',

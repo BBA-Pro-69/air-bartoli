@@ -1,0 +1,59 @@
+/* =====================================================================
+   Air Bartoli - avatars de la famille
+   Ce fichier ne fait que l'habillage des elements produits par
+   avatar() et personLabel() dans js/ui.js. Les tailles sont aussi
+   posees en attributs width/height cote JavaScript, ce qui evite tout
+   decalage de mise en page pendant le chargement des images.
+   ===================================================================== */
+.person-avatar{display:inline-block;flex:none;max-width:100%;border-radius:50%;
+  object-fit:cover;background:#0b2046;border:2px solid rgba(255,255,255,.65);
+  box-shadow:0 2px 6px rgba(9,18,40,.22)}
+.person-avatar-xs{width:22px;height:22px;border-width:1.5px}
+.person-avatar-sm{width:30px;height:30px}
+.person-avatar-md{width:40px;height:40px}
+.person-avatar-lg{width:60px;height:60px;border-width:3px;
+  box-shadow:0 6px 16px rgba(9,18,40,.3)}
+
+.person-label{display:inline-flex;align-items:center;gap:7px;min-width:0;
+  max-width:100%;vertical-align:middle}
+.person-label > span{min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+
+/* Saisie rapide */
+.kid-name .person-label{justify-content:center}
+
+/* Selecteurs d'enfant */
+.chip .person-label{gap:6px}
+.chip .person-avatar{border-width:1.5px}
+
+/* Bandeau de l'ecran Enfants */
+.hero-person{display:flex;align-items:center;margin-bottom:10px}
+.hero-person .person-label{gap:12px;font-size:1.05rem;font-weight:800}
+.hero-person .person-avatar{border-color:rgba(255,255,255,.85)}
+
+/* Journal */
+.journal-filter-btn .person-label{gap:6px}
+.journal-day-score .person-avatar{width:13px;height:13px;border-width:1px;
+  box-shadow:none}
+.journal-summary-top .person-label,
+.journal-modal-summary .person-label{gap:7px}
+.entry > .person-avatar{margin-top:2px;border-color:rgba(148,163,184,.55)}
+
+/* Analyse */
+.legend-person{display:inline-flex;align-items:center;gap:6px}
+
+/* Parent connecte, barre du haut */
+#userName{display:inline-flex;align-items:center;gap:6px}
+#userName .person-avatar{border-color:rgba(255,255,255,.55)}
+
+/* Connexion */
+.who button{display:flex;align-items:center;justify-content:center;gap:10px}
+.who button .person-label{font-weight:700}
+
+@media (max-width:760px){
+  #userName{max-width:9rem}
+  #userName > span:last-child{overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .journal-day-score .person-avatar{width:11px;height:11px}
+  .hero-person .person-label{font-size:.98rem}
+}

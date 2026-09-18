@@ -38,7 +38,7 @@ function render() {
     ...children.map(k => el('button', {
       class: 'chip' + (k.id === current ? ' on' : ''),
       onclick: () => { current = k.id; render(); }
-    }, personLabel(k.first_name, { size: 'sm' }))));
+    }, personLabel(k.first_name, { size: 'sm' })))));
 
   // --- bandeau : solde, niveau, distance au niveau suivant
   const next = lv.next_level_points;

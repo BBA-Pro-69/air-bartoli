@@ -44,7 +44,7 @@ function render() {
         ...children.map(c => el('button', {
           class: 'chip' + (enfant === c.id ? ' on' : ''),
           onclick: () => { enfant = c.id; render(); }
-        }, personLabel(c.first_name, { size: 'sm' })))));
+        }, personLabel(c.first_name, { size: 'sm' }))))));
 
   const p = profile.filter(r => !enfant || r.child_id === enfant);
 

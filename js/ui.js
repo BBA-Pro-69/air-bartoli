@@ -25,14 +25,19 @@ export function avatarSrc(name = '') {
   return alias ? PERSON_AVATARS[alias] : '';
 }
 
+const PERSON_AVATAR_PX = { xs: 22, sm: 30, md: 40, lg: 60 };
+
 export function avatar(name, { size = 'md', className = '', title = name } = {}) {
   const src = avatarSrc(name);
+  const px = PERSON_AVATAR_PX[size] || PERSON_AVATAR_PX.md;
   if (!src) return el('span', { class: `person-avatar person-avatar-${size} ${className}`.trim(), 'aria-hidden': 'true' });
   return el('img', {
     class: `person-avatar person-avatar-${size} ${className}`.trim(),
     src,
     alt: title || name,
     title: title || name,
+    width: String(px),
+    height: String(px),
     loading: 'lazy',
     decoding: 'async'
   });
