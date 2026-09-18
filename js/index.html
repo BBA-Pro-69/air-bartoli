@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0B2046">
+<meta name="robots" content="noindex,nofollow">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Keyrilès">
+<title>Air Bartoli · Keyrilès</title>
+<link rel="manifest" href="./manifest.webmanifest?v=2026-09-19a">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-180.png?v=2026-09-19a">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png?v=2026-09-19a">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css?v=2026-09-19a">
+</head>
+<body>
+
+<div id="bootScreen" class="boot"><span class="boot-mark">✈</span><p>Air Bartoli…</p></div>
+
+<div id="appShell" hidden>
+
+  <!-- Bandeau d'installation, masqué 7 jours si on le ferme -->
+  <div id="installBanner" class="install-banner">
+    <span class="ib-ico">📲</span>
+    <p id="installTxt"></p>
+    <button type="button" id="installGo" class="ib-go">Installer</button>
+    <button type="button" id="installClose" class="ib-close" aria-label="Masquer">×</button>
+  </div>
+
+  <header class="appbar">
+    <span class="brand-mark">✈</span>
+    <div class="appbar-titles">
+      <span class="appbar-app">Air Bartoli</span>
+      <strong id="viewTitle">Saisie</strong>
+    </div>
+    <button type="button" class="appbar-install" data-install hidden>Installer</button>
+    <button type="button" class="appbar-user" id="userName" onclick="document.getElementById('appmenu').classList.add('show')">…</button>
+  </header>
+
+  <main class="app-main" id="appMain">
+    <section class="view" data-view="saisie"></section>
+    <section class="view" data-view="enfant"></section>
+    <section class="view" data-view="historique"></section>
+    <section class="view" data-view="dashboard"></section>
+    <section class="view" data-view="reglages"></section>
+    <p class="swipe-hint">← glisse pour changer d’écran →</p>
+  </main>
+
+  <!-- Barre basse, zone du pouce -->
+  <nav id="appnav" aria-label="Navigation">
+    <div class="grip"><span></span></div>
+    <div class="row" id="tabRow"></div>
+  </nav>
+
+  <!-- Feuille « toutes les rubriques » -->
+  <div id="appmenu">
+    <div class="am-bg" id="menuBg"></div>
+    <div class="am-sheet">
+      <div class="am-grip"><span></span></div>
+      <div class="am-head">
+        <strong>Air Bartoli · Keyrilès</strong>
+        <button type="button" class="btn btn-sm" id="menuClose">Fermer</button>
+      </div>
+      <div class="am-scroll">
+        <div class="am-fam"><span>Écrans</span><span class="line"></span></div>
+        <div class="am-grid" id="menuGrid"></div>
+        <div class="am-fam"><span>Application</span><span class="line"></span></div>
+        <button type="button" class="am-install" data-install hidden>
+          <span class="lead">📲</span> Installer l’application <span class="go">›</span>
+        </button>
+        <button type="button" class="am-install ghost" id="btnUpdate">
+          <span class="lead">⟳</span> Rechercher une mise à jour <span class="go">›</span>
+        </button>
+        <button type="button" class="am-logout" id="btnLogout">Se déconnecter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bandeau de mise à jour -->
+  <div id="swBanner">
+    <div class="sw-box">
+      <div>
+        <strong>Nouvelle version disponible</strong>
+        <span>Recharge pour obtenir la dernière évolution.</span>
+      </div>
+      <button type="button" id="swGo" class="sw-go">Mettre à jour</button>
+      <button type="button" id="swLater" class="sw-later" aria-label="Plus tard">×</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="js/app.js?v=2026-09-19a"></script>
+</body>
+</html>

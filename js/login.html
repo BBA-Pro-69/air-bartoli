@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2046">
+<meta name="robots" content="noindex,nofollow">
+<title>Connexion · Air Bartoli</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="./manifest.webmanifest?v=2026-09-19a">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-180.png?v=2026-09-19a">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png?v=2026-09-19a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Keyrilès">
+<link rel="stylesheet" href="css/app.css?v=2026-09-19a">
+</head>
+<body class="login">
+<form class="login-box" id="form">
+  <div class="login-title">
+    <span class="brand-mark" style="background:#00A7E1;color:#fff">✈</span>
+    <h1 style="margin:0">Air Bartoli</h1>
+  </div>
+  <p class="muted">Programme Keyrilès. Réservé à l'équipage.</p>
+  <!-- Deux boutons plutot qu'un champ e-mail : plus rapide sur telephone,
+       et Chrome ne melange plus les mots de passe des autres applications
+       hebergees sur la meme origine. -->
+  <div class="who" id="who"></div>
+  <div class="field">
+    <label for="pwd">Mot de passe</label>
+    <input id="pwd" type="password" autocomplete="current-password" required>
+  </div>
+  <button class="btn btn-primary" style="width:100%" id="go">Embarquer</button>
+  <p class="muted" id="msg" style="margin:12px 0 0;color:#dc2626"></p>
+</form>
+<script type="module" src="js/login.js"></script>
+</body>
+</html>
