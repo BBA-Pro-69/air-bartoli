@@ -40,6 +40,83 @@ function shortDay(iso) {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).format(dateObj(iso));
 }
 
+function weekStart(iso) {
+  const d = dateObj(iso);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return isoDate(d);
+}
+
+function weekEnd(iso) {
+  return addDays(weekStart(iso), 6);
+}
+
+function boosterEntries(list = events) {
+  const flags = eventFlags(list);
+  return list.filter(e =>
+    (e.kind === 'booster' || e.kind === 'bonus_streak') &&
+    !flags.reversed.has(e.id) &&
+    (!filter || e.child_id === filter));
+}
+
+function boosterType(e) {
+  return /mensuel|mois/i.test(e.note || '') ? 'month' : 'week';
+}
+
+function boosterLabel(e) {
+  return boosterType(e) === 'month' ? 'Booster mensuel' : 'Booster hebdomadaire';
+}
+
+function boosterGroup(e) {
+  if (boosterType(e) === 'month') {
+    const start = monthStart(e.event_date);
+    return {
+      key: 'month:' + start,
+      label: 'Mois de ' + monthLabel(start),
+      order: start
+    };
+  }
+  const start = weekStart(e.event_date);
+  return {
+    key: 'week:' + start,
+    label: 'Semaine du ' + shortDay(start) + ' au ' + shortDay(weekEnd(start)),
+    order: start
+  };
+}
+
+function renderBoosters() {
+  const list = boosterEntries();
+  const total = list.reduce((sum, e) => sum + Math.max(Number(e.points || 0), 0), 0);
+  const groups = new Map();
+  list.forEach(e => {
+    const group = boosterGroup(e);
+    if (!groups.has(group.key)) groups.set(group.key, { ...group, entries: [] });
+    groups.get(group.key).entries.push(e);
+  });
+  const ordered = [...groups.values()].sort((a, b) => b.order.localeCompare(a.order));
+
+  return el('section', { class: 'card journal-boosters' },
+    el('div', { class: 'journal-booster-head' },
+      el('div', {},
+        el('h2', {}, 'Boosters gagnés'),
+        el('p', { class: 'muted' }, 'Sur le mois affiché, regroupés par semaine ou par mois calendaire.')),
+      el('div', { class: 'journal-booster-total' },
+        el('strong', {}, '+' + total),
+        el('span', {}, list.length + ' booster' + (list.length > 1 ? 's' : '')))),
+    ordered.length ? el('div', { class: 'journal-booster-groups' }, ...ordered.map(group =>
+      el('div', { class: 'journal-booster-group' },
+        el('h3', {}, group.label),
+        ...group.entries.map(e => {
+          const c = child(e.child_id);
+          return el('div', { class: 'journal-booster-row' },
+            avatar(c?.first_name || 'Enfant', { size: 'xs', title: c?.first_name || 'Enfant' }),
+            el('div', { class: 'journal-booster-main' },
+              el('strong', {}, c?.first_name || 'Enfant'),
+              el('span', { class: 'muted' }, boosterLabel(e) + ' · ' + api.formatDate(e.event_date))),
+            el('strong', { class: 'journal-booster-points' }, '+' + Number(e.points || 0)));
+        })))
+      : el('p', { class: 'muted' }, 'Aucun booster gagné sur cette période.'));
+}
+
 function dayStats(childId, date) {
   const d = daily.find(x => x.child_id === childId && x.event_date === date);
   const gained = Number(d?.gained || 0);
@@ -81,6 +158,7 @@ function render() {
       el('span', { class: 'journal-badge' }, view === 'calendar' ? 'Vue calendrier' : 'Aujourd’hui')),
     renderViewSwitch(),
     renderChildFilter(),
+    renderBoosters(),
     view === 'calendar' ? renderCalendar() : renderToday()
   );
 }
@@ -125,6 +203,7 @@ function renderCalendar() {
   while (days.length % 7) days.push(null);
 
   const weekNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const visibleBoosters = boosterEntries();
   const cells = days.map(day => {
     if (!day) return el('div', { class: 'journal-day blank', 'aria-hidden': 'true' });
     const rows = dailyMapFor(day).map(({ child: c, stats }) => {
@@ -139,7 +218,10 @@ function renderCalendar() {
     return el('button', { class: 'journal-day' + (isToday ? ' today' : '') + (isSelected ? ' selected' : ''),
       onclick: () => { selectedDay = day; openDay(day); } },
       el('span', { class: 'journal-day-number' }, String(dateObj(day).getDate())),
-      el('div', { class: 'journal-day-scores' }, ...rows));
+      el('div', { class: 'journal-day-scores' }, ...rows,
+        visibleBoosters.some(e => e.event_date === day)
+          ? el('span', { class: 'journal-booster-mark', title: 'Booster gagné ce jour' }, '⚡')
+          : null));
   });
 
   return el('section', { class: 'journal-calendar-card card' },
@@ -188,7 +270,7 @@ function entry(e, isReversed, isRepaired) {
   const parent = k.parent_id ? cat(k.parent_id).label : null;
   const cls = e.kind === 'repair' ? 'rep' : e.points > 0 ? 'pos' : e.points < 0 ? 'neg' : 'muted';
   const meta = [parent, api.dayPartLabel(e.day_part), e.note].filter(Boolean).join(' · ');
-  const label = e.kind === 'bonus_streak' ? 'Booster'
+  const label = (e.kind === 'booster' || e.kind === 'bonus_streak') ? 'Booster'
     : (k.label || (e.kind === 'reward' ? (e.note || 'Échange') : 'Écriture'));
   const actions = [];
   if (!isReversed && e.kind !== 'reversal' && e.kind !== 'reward') {
