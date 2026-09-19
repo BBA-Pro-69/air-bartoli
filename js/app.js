@@ -37,7 +37,8 @@ function showBootError(error) {
   if (!screen || screen.dataset.errorShown) return;
   screen.dataset.errorShown = 'true';
   screen.classList.add('boot-failed');
-  const message = error?.message || String(error);
+  const stack = error?.stack ? (' ' + (error.stack.split('\n')[1] || '').trim()) : '';
+  const message = (error?.message || String(error)) + stack;
   const label = screen.querySelector('p');
   if (label) label.textContent = 'Impossible de démarrer';
   screen.append(document.createElement('small'));
