@@ -138,10 +138,11 @@ async function rpc(name, args) {
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ''));
   return data;
 }
-export const addEvent = (child_id, category_id, points, date, day_part, note) =>
+export const addEvent = (child_id, category_id, points, date, day_part, note, force_kind = null, repairable = null) =>
   rpc('add_event', { p_child_id: child_id, p_category_id: category_id,
                      p_points: points ?? null, p_date: date ?? null,
-                     p_day_part: day_part ?? null, p_note: note || null });
+                     p_day_part: day_part ?? null, p_note: note || null,
+                     p_force_kind: force_kind, p_repairable: repairable });
 export const reverseEvent = (id, reason) => rpc('reverse_event', { p_event_id: id, p_reason: reason || null });
 export const repairEvent  = (id, note)   => rpc('repair_event',  { p_event_id: id, p_ratio: 0.5, p_note: note || null });
 export const requestRedemption = (reward_id, shares) =>

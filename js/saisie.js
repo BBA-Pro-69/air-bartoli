@@ -1,11 +1,10 @@
 // =====================================================================
 //  Saisie rapide Air Bartoli.
 //  1. Score global actuel en tête
-//  2. Titre et règle
-//  3. Score de la journée sélectionnée + sélecteur de date
-//  4. Note de la journée (catégorie 'Journée', usage principal)
-//  5. Autres catégories (modal détaillée avec points ajustables et contextes)
-//  6. Historique de la journée avec bouton « Réparer » immédiat
+//  2. Score de la journée + Sélecteur de date centré
+//  3. Note de la journée (catégorie 'Journée', usage principal)
+//  4. Autres catégories (modal avec bonus/malus, réparable, contextes)
+//  5. Historique de la journée avec bouton « Réparer » immédiat
 // =====================================================================
 import * as api from './api.js';
 import { el, pts, toast, fail, undoBar, modal, personLabel, avatar } from './ui.js';
@@ -64,7 +63,7 @@ function renderGlobalScores() {
 }
 
 // ---------------------------------------------------------------------
-// 3. Score de la journée + sélecteur de date
+// 2. Score de la journée + sélecteur de date centré
 // ---------------------------------------------------------------------
 function computeDayStats(childId) {
   const evs = state.dayEvents.filter(e => e.child_id === childId);
@@ -94,7 +93,7 @@ function renderDayScoreHeader() {
 }
 
 // ---------------------------------------------------------------------
-// 4. Note de la journée (catégorie racine "Journée" ou équivalent)
+// 3. Note de la journée (catégorie racine "Journée" ou équivalent)
 // ---------------------------------------------------------------------
 function renderDayTiles() {
   const box = $('#dayTiles');
@@ -105,24 +104,22 @@ function renderDayTiles() {
     return;
   }
 
-  // Chercher la racine "Journée"
   const dayRoot = roots().find(r => r.label.toLowerCase() === 'journée' || r.label.toLowerCase() === 'journee');
   const daySubs = dayRoot ? subs(dayRoot.id) : [];
 
   if (daySubs.length) {
     daySubs.forEach(c => box.append(tile(c, false, null)));
   } else {
-    // Si pas de sous-catégories, proposer les raccourcis bonus/malus par défaut
     box.append(
       el('button', {
         class: 'tile tile-bonus',
-        onclick: ev => openDetailedModal(dayRoot || { label: 'Journée réussie', kind: 'bonus', default_points: 3 }, 3)
+        onclick: ev => openDetailedModal(dayRoot || { label: 'Journée réussie', kind: 'bonus', default_points: 3 })
       },
         el('span', { class: 'tile-label' }, 'Journée réussie'),
         el('span', { class: 'tile-pts' }, '+3 pts')),
       el('button', {
         class: 'tile tile-malus',
-        onclick: ev => openDetailedModal(dayRoot || { label: 'Journée difficile', kind: 'malus', default_points: 3 }, 3)
+        onclick: ev => openDetailedModal(dayRoot || { label: 'Journée difficile', kind: 'malus', default_points: 3 })
       },
         el('span', { class: 'tile-label' }, 'Journée difficile'),
         el('span', { class: 'tile-pts' }, '-3 pts')));
@@ -134,14 +131,14 @@ function tile(cat, free = false, context = null) {
   const p = malus ? -Math.abs(cat.default_points) : cat.default_points;
   return el('button', {
     class: 'tile ' + (malus ? 'tile-malus' : 'tile-bonus'),
-    onclick: ev => write(cat, free ? null : p, null, context, ev.currentTarget)
+    onclick: ev => write(cat, free ? null : p, null, context, cat.kind, cat.repairable, ev.currentTarget)
   },
     el('span', { class: 'tile-label' }, cat.label),
     el('span', { class: 'tile-pts' }, free ? 'au choix' : pts(p)));
 }
 
 // ---------------------------------------------------------------------
-// 5. Autres catégories (carte détaillée avec sous-catégories et contextes)
+// 4. Autres catégories (modal avec bonus/malus, réparable et contextes)
 // ---------------------------------------------------------------------
 function renderOtherCategories() {
   const container = $('#otherCatsButtons');
@@ -163,14 +160,74 @@ function renderOtherCategories() {
 function openDetailedModal(category) {
   const subList = subs(category.id);
   const hasSubs = subList.length > 0;
-
   let currentSub = hasSubs ? subList[0] : category;
 
+  // Sens : 'bonus' ou 'malus'
+  let currentKind = (currentSub.kind === 'malus') ? 'malus' : 'bonus';
+  let isRepairable = (currentKind === 'malus') ? (currentSub.repairable ?? true) : false;
+
+  // Conteneur de prévisualisation de couleur / polarité
+  const previewBox = el('div', {
+    class: 'point-nature-indicator ' + (currentKind === 'malus' ? 'nature-malus' : 'nature-bonus'),
+    style: 'display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-weight:700'
+  },
+    el('span', { class: 'nature-text' }, currentKind === 'malus' ? '🔴 Malus (on perd des points)' : '🔵 Bonus (on gagne des points)'),
+    el('span', { class: 'nature-sign' }, currentKind === 'malus' ? '−' : '+'));
+
+  // Boutons bascule Bonus / Malus
+  const btnBonus = el('button', {
+    type: 'button',
+    class: 'chip' + (currentKind === 'bonus' ? ' on' : ''),
+    style: 'flex:1;min-height:40px;justify-content:center',
+    onclick: () => setKind('bonus')
+  }, '🔵 Bonus');
+
+  const btnMalus = el('button', {
+    type: 'button',
+    class: 'chip' + (currentKind === 'malus' ? ' on' : ''),
+    style: 'flex:1;min-height:40px;justify-content:center',
+    onclick: () => setKind('malus')
+  }, '🔴 Malus');
+
+  // Case à cocher Réparable
+  const repairCheckbox = el('input', {
+    type: 'checkbox',
+    checked: isRepairable,
+    style: 'width:20px;height:20px;cursor:pointer',
+    onchange: e => { isRepairable = e.target.checked; }
+  });
+
+  const repairRow = el('label', {
+    class: 'row',
+    style: 'gap:10px;cursor:pointer;margin-top:10px;display:' + (currentKind === 'malus' ? 'flex' : 'none')
+  },
+    repairCheckbox,
+    el('span', { style: 'font-weight:600;font-size:.9rem;color:var(--ink)' },
+      'Action réparable (+50 % des points récupérés si réparé)'));
+
+  function setKind(kind) {
+    currentKind = kind;
+    btnBonus.classList.toggle('on', kind === 'bonus');
+    btnMalus.classList.toggle('on', kind === 'malus');
+    previewBox.className = 'point-nature-indicator ' + (kind === 'malus' ? 'nature-malus' : 'nature-bonus');
+    previewBox.querySelector('.nature-text').textContent = kind === 'malus' ? '🔴 Malus (on perd des points)' : '🔵 Bonus (on gagne des points)';
+    previewBox.querySelector('.nature-sign').textContent = kind === 'malus' ? '−' : '+';
+    repairRow.style.display = kind === 'malus' ? 'flex' : 'none';
+    if (kind === 'malus') {
+      repairCheckbox.checked = true;
+      isRepairable = true;
+    } else {
+      isRepairable = false;
+    }
+  }
+
+  // Sous-catégories
   const subSelect = el('select', {
     disabled: !hasSubs,
     onchange: e => {
       currentSub = subList.find(s => s.id === e.target.value) || category;
       pointsInput.value = String(currentSub.default_points || 1);
+      setKind(currentSub.kind === 'malus' ? 'malus' : 'bonus');
     }
   },
     hasSubs
@@ -195,9 +252,14 @@ function openDetailedModal(category) {
   });
 
   const body = el('div', {},
+    previewBox,
+    el('div', { class: 'field' },
+      el('label', {}, 'Nature des points'),
+      el('div', { class: 'row', style: 'gap:8px;margin-bottom:8px' }, btnBonus, btnMalus),
+      repairRow),
     el('div', { class: 'field' }, el('label', {}, 'Sous-catégorie'), subSelect),
     el('div', { class: 'fields' },
-      el('div', { class: 'field' }, el('label', {}, 'Points attribués'), pointsInput),
+      el('div', { class: 'field' }, el('label', {}, 'Nombre de points'), pointsInput),
       el('div', { class: 'field' }, el('label', {}, 'Moment / Contexte'), contextSelect)),
     el('div', { class: 'field' }, el('label', {}, 'Note'), noteInput));
 
@@ -205,11 +267,12 @@ function openDetailedModal(category) {
     label: 'Enregistrer',
     class: 'btn-primary',
     onClick: async close => {
-      const p = Number(pointsInput.value) || currentSub.default_points || 1;
+      const absPoints = Math.abs(Number(pointsInput.value) || currentSub.default_points || 1);
+      const finalPoints = (currentKind === 'malus') ? -absPoints : absPoints;
       const note = noteInput.value.trim() || null;
       const context = contextSelect.value || null;
       close();
-      await write(currentSub, p, note, context, null);
+      await write(currentSub, finalPoints, note, context, currentKind, isRepairable, null);
     }
   }]);
 }
@@ -217,14 +280,14 @@ function openDetailedModal(category) {
 // ---------------------------------------------------------------------
 // Écriture d'un événement
 // ---------------------------------------------------------------------
-async function write(cat, points, note, context = null, origin = null) {
+async function write(cat, points, note, context = null, forceKind = null, repairable = null, origin = null) {
   try {
-    const ev = await api.addEvent(state.child, cat.id, points, state.date, context, note);
+    const ev = await api.addEvent(state.child, cat.id, points, state.date, context, note, forceKind, repairable);
     const kidObj = state.children.find(c => c.id === state.child);
     celebrate(ev.points, origin, cat.label);
     await refresh();
 
-    if (ev.points === 0 && cat.kind === 'malus') {
+    if (ev.points === 0 && (forceKind === 'malus' || cat.kind === 'malus')) {
       toast(kidObj.first_name + ' est déjà à 0 : rien retiré, mais c\'est noté.', 'ok', 5000);
     } else {
       toast(kidObj.first_name + ' · ' + cat.label + ' · ' + pts(ev.points));
@@ -241,7 +304,7 @@ async function write(cat, points, note, context = null, origin = null) {
 }
 
 // ---------------------------------------------------------------------
-// 6. Historique de la journée avec bouton « Réparer » immédiat
+// 5. Historique de la journée avec bouton « Réparer » immédiat
 // ---------------------------------------------------------------------
 function renderDayHistory() {
   const box = $('#dayHistoryEntries');
@@ -254,7 +317,6 @@ function renderDayHistory() {
     return;
   }
 
-  // Drapeaux contrepassé / réparé
   const reversed = new Set(evs.filter(e => e.reverses_id).map(e => e.reverses_id));
   const repaired = new Set(evs.filter(e => e.repairs_id).map(e => e.repairs_id));
 
@@ -263,7 +325,6 @@ function renderDayHistory() {
     const isRep = repaired.has(e.id);
     const catLabel = e.categories?.label || (e.kind === 'booster' || e.kind === 'bonus_streak' ? 'Booster' : (e.kind === 'reward' ? 'Récompense' : 'Saisie'));
     const meta = [e.day_part, e.note].filter(Boolean).join(' · ');
-
     const canRepair = e.points < 0 && e.categories?.repairable && !isRev && !isRep;
 
     box.append(el('div', { class: 'entry' + (isRev ? ' cancelled' : '') },
@@ -292,40 +353,35 @@ export async function mount(container) {
   root = container;
   root.innerHTML = '';
   root.append(
-    // 1. Score global actuel
+    // 1. Score global actuel (tout en haut)
     el('div', { class: 'section-divider', style: 'margin-top:6px' }, el('span', {}, 'Score global actuel')),
     el('div', { class: 'card' }, el('div', { class: 'kids', id: 'globalKids' })),
 
-    // 2. Titre et règle
-    el('h1', { style: 'margin-top:18px' }, 'Saisie'),
-    el('p', { class: 'muted', style: 'margin-top:-4px;line-height:1.5' },
-      'Un appui sur une tuile enregistre tout de suite.', el('br', {}),
-      'Dix secondes pour revenir en arrière.'),
-
-    // 3. Score de la journée + Sélecteur de date
+    // 2. Score de la journée + Sélecteur de date centré
     el('div', { class: 'section-divider' }, el('span', {}, 'Score de la journée')),
-    el('div', { class: 'card' },
-      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
-        el('div', { class: 'row', id: 'dayScoresBox', style: 'gap:8px' }),
+    el('div', { class: 'card', style: 'text-align:center' },
+      el('div', { class: 'row', style: 'justify-content:center;margin-bottom:12px' },
+        el('label', { for: 'saisieDate', style: 'display:none' }, 'Date sélectionnée'),
         el('input', {
           type: 'date', id: 'saisieDate', value: state.date, max: state.date,
-          style: 'width:auto;min-height:38px;padding:6px 10px',
+          class: 'saisie-date-centered',
           onchange: async e => { state.date = e.target.value; await refresh(); }
-        }))),
+        })),
+      el('div', { class: 'row', id: 'dayScoresBox', style: 'justify-content:center;gap:10px' })),
 
-    // 4. Note de la journée (catégorie 'Journée')
+    // 3. Note de la journée (catégorie 'Journée')
     el('div', { class: 'section-divider' }, el('span', {}, 'Note de la journée')),
     el('div', { class: 'card' },
       el('div', { class: 'tiles category-tile-grid', id: 'dayTiles' })),
 
-    // 5. Autres catégories
+    // 4. Autres catégories
     el('div', { class: 'section-divider' }, el('span', {}, 'Autres catégories')),
     el('div', { class: 'card' },
       el('p', { class: 'muted', style: 'margin-top:-4px;margin-bottom:12px' },
         'Choisis une catégorie pour préciser le moment et ajuster les points :'),
       el('div', { class: 'chips', id: 'otherCatsButtons' })),
 
-    // 6. Historique de la journée
+    // 5. Historique de la journée
     el('div', { class: 'section-divider' }, el('span', {}, 'Historique de la journée')),
     el('div', { class: 'card' },
       el('div', { id: 'dayHistoryEntries' })));

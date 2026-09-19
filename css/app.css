@@ -665,3 +665,11 @@ body.menu-open{overflow:hidden}
 .day-score-badge.active{border-color:var(--kid,var(--cyan));box-shadow:0 0 0 3px color-mix(in srgb,var(--kid,var(--cyan)) 16%,transparent)}
 .day-score-badge .name{font-weight:600;color:var(--ink)}
 .day-score-badge strong{font-size:.95rem}
+
+/* ---- indicateur de nature de point (modal saisie) ---- */
+.point-nature-indicator{transition:all .2s;border:1px solid transparent}
+.point-nature-indicator.nature-bonus{background:#eff6ff;color:var(--cyan-d);border-color:#bfdbfe}
+.point-nature-indicator.nature-malus{background:#fef2f2;color:var(--red);border-color:#fecaca}
+.point-nature-indicator .nature-sign{font-size:1.4rem;line-height:1}
+
+.saisie-date-centered{width:auto;min-height:42px;padding:8px 16px;border-radius:12px;font-weight:600;font-size:1rem;text-align:center;box-shadow:0 1px 3px rgba(15,23,42,.08)}
