@@ -85,7 +85,7 @@ export async function requireSession() {
 const rows = async (q) => { const { data, error } = await q; if (error) throw error; return data || []; };
 
 export const getChildren   = () => rows(sb.from('children').select('*').eq('active', true).order('sort_order'));
-export const getCategories = () => rows(sb.from('categories').select('*').order('sort_order'));
+export const getCategories = () => rows(sb.from('categories').select('*').eq('active', true).order('sort_order'));
 export const getRewards    = () => rows(sb.from('rewards').select('*').order('cost'));
 export const getBalances   = () => rows(sb.from('v_child_balance').select('*'));
 export const getLevels     = () => rows(sb.from('v_child_level').select('*'));
