@@ -33,7 +33,9 @@ async function load() {
   rewards = rw;
   elig = elg;
   rates = rt;
-  rewardHistory = evs.filter(e => e.kind === 'reward');
+  // Exclure formellement les récompenses qui ont été annulées (reverses_id existant)
+  const reversedIds = new Set(evs.filter(e => e.reverses_id).map(e => e.reverses_id));
+  rewardHistory = evs.filter(e => e.kind === 'reward' && !reversedIds.has(e.id));
 
   if (!current) current = children[0]?.id;
 }
