@@ -7,7 +7,7 @@ import * as api from './api.js';
 import { el, pts, toast, fail, modal, gauge, personLabel } from './ui.js';
 
 let root = null;
-let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], current = null;
+let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], current = null, currentTab = 'individual';
 
 const bal   = id => (balances.find(b => b.child_id === id) || {}).balance ?? 0;
 const rate  = id => (rates.find(r => r.child_id === id) || {}).weekly_rate ?? 0;
@@ -40,7 +40,7 @@ function render() {
       onclick: () => { current = k.id; render(); }
     }, personLabel(k.first_name, { size: 'sm' })))));
 
-  // --- bandeau : solde, niveau, distance au niveau suivant
+  // --- bandeau synthétique : solde, niveau, jauge
   const next = lv.next_level_points;
   app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046)` },
     el('div', { class: 'hero-person' }, personLabel(c.first_name, { size: 'lg' })),
@@ -55,27 +55,53 @@ function render() {
       : el('div', { class: 'hero-sub', style: 'margin-top:10px' }, 'Niveau maximum atteint.'),
     lv.perks ? el('div', { class: 'hero-sub', style: 'margin-top:8px' }, '★ ' + lv.perks) : null));
 
-  // --- ce que tu gagnes en ce moment
-  app.append(el('div', { class: 'card' },
-    el('h2', {}, 'Ton rythme'),
-    el('p', { style: 'margin:0' },
-      rate(current) > 0
-        ? el('span', {}, 'En ce moment tu gagnes ', el('strong', {}, rate(current) + ' points'), ' par semaine.')
-        : el('span', { class: 'muted' }, 'Pas encore assez de points pour calculer ton rythme.'))));
+  // --- sous-onglets horizontaux segmentés (Pour toi / Ensemble / Mon rythme)
+  const indRewards = rewards.filter(r => r.scope === 'individual' && r.active);
+  const colRewards = rewards.filter(r => r.scope === 'collective' && r.active);
 
-  // --- catalogue individuel
-  app.append(el('div', { class: 'card' },
-    el('h2', {}, 'Pour toi'),
-    el('div', { class: 'rewards' },
-      ...rewards.filter(r => r.scope === 'individual' && r.active).map(r => rewardCard(r)))));
+  const subTabs = [
+    { id: 'individual', label: 'Pour toi (' + indRewards.length + ')' },
+    { id: 'collective', label: 'Ensemble (' + colRewards.length + ')' },
+    { id: 'status',     label: 'Mon rythme' }
+  ];
 
-  // --- catalogue collectif
-  app.append(el('div', { class: 'card' },
-    el('h2', {}, 'Ensemble'),
-    el('p', { class: 'muted', style: 'margin-top:-6px' },
-      'Il faut le total, et il faut que chacun ait son minimum. Personne ne paie pour l\'autre.'),
-    el('div', { class: 'rewards' },
-      ...rewards.filter(r => r.scope === 'collective' && r.active).map(r => collectiveCard(r)))));
+  app.append(el('div', { class: 'subtabs-bar', role: 'tablist', style: 'margin-bottom:14px' },
+    ...subTabs.map(t => el('button', {
+      class: 'subtab-btn' + (currentTab === t.id ? ' on' : ''),
+      role: 'tab',
+      'aria-selected': currentTab === t.id,
+      onclick: () => { currentTab = t.id; render(); }
+    }, t.label))));
+
+  if (currentTab === 'individual') {
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Pour toi'),
+      indRewards.length
+        ? el('div', { class: 'rewards' }, ...indRewards.map(r => rewardCard(r)))
+        : el('p', { class: 'muted' }, 'Aucune récompense individuelle configurée.')));
+  } else if (currentTab === 'collective') {
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Ensemble'),
+      el('p', { class: 'muted', style: 'margin-top:-6px' },
+        'Il faut le total, et il faut que chacun ait son minimum. Personne ne paie pour l\'autre.'),
+      colRewards.length
+        ? el('div', { class: 'rewards' }, ...colRewards.map(r => collectiveCard(r)))
+        : el('p', { class: 'muted' }, 'Aucune récompense collective configurée.')));
+  } else if (currentTab === 'status') {
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Ton rythme'),
+      el('p', { style: 'margin:0' },
+        rate(current) > 0
+          ? el('span', {}, 'En ce moment tu gagnes ', el('strong', {}, rate(current) + ' points'), ' par semaine.')
+          : el('span', { class: 'muted' }, 'Pas encore assez de points pour calculer ton rythme.')),
+      lv.next_level_points
+        ? el('div', { style: 'margin-top:14px' },
+            el('h3', {}, 'Statut ' + (lv.level_label || 'Décollage')),
+            gauge(lv.status_points, lv.next_level_points, 'var(--cyan)'),
+            el('p', { class: 'muted', style: 'margin-top:6px' },
+              lv.status_points + ' / ' + lv.next_level_points + ' miles'))
+        : null));
+  }
 }
 
 function rewardCard(r) {

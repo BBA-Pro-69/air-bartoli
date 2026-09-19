@@ -2,7 +2,7 @@
    Même choix que Chicago-Bruno-Chris : cache versionné, réseau d'abord,
    repli sur le shell si le réseau est lent ou absent. Les appels Supabase
    ne sont pas mis en cache : les points doivent toujours venir de la base. */
-const VERSION = '2026-09-19h';
+const VERSION = '2026-09-19i';
 const SHELL = 'air-bartoli-shell-' + VERSION;
 const VENDOR = 'air-bartoli-vendor-' + VERSION;
 const PATIENCE = 1200;

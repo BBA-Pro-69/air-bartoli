@@ -647,3 +647,10 @@ body.menu-open{overflow:hidden}
 
 .boot-failed{padding:24px;max-width:min(620px,90vw);text-align:center}
 .boot-error-detail{display:block;margin-top:10px;color:#fecaca;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+
+/* ---- sous-onglets horizontaux segmentes (anti-scroll mobile) ---- */
+.subtabs-bar{display:flex;gap:6px;overflow-x:auto;padding:3px;background:#e2e8f0;border-radius:12px;-webkit-overflow-scrolling:touch}
+.subtabs-bar::-webkit-scrollbar{display:none}
+.subtab-btn{flex:1;min-height:36px;padding:6px 14px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:.88rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s}
+.subtab-btn:hover{color:var(--ink)}
+.subtab-btn.on{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(15,23,42,.1)}
