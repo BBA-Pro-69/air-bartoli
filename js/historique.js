@@ -113,7 +113,7 @@ function renderBoosters() {
               el('strong', {}, c?.first_name || 'Enfant'),
               el('span', { class: 'muted' }, boosterLabel(e) + ' · ' + api.formatDate(e.event_date))),
             el('strong', { class: 'journal-booster-points' }, '+' + Number(e.points || 0)));
-        })))
+        }))))
       : el('p', { class: 'muted' }, 'Aucun booster gagné sur cette période.'));
 }
 
