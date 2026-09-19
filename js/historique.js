@@ -188,6 +188,8 @@ function entry(e, isReversed, isRepaired) {
   const parent = k.parent_id ? cat(k.parent_id).label : null;
   const cls = e.kind === 'repair' ? 'rep' : e.points > 0 ? 'pos' : e.points < 0 ? 'neg' : 'muted';
   const meta = [parent, api.dayPartLabel(e.day_part), e.note].filter(Boolean).join(' · ');
+  const label = e.kind === 'bonus_streak' ? 'Booster'
+    : (k.label || (e.kind === 'reward' ? (e.note || 'Échange') : 'Écriture'));
   const actions = [];
   if (!isReversed && e.kind !== 'reversal' && e.kind !== 'reward') {
     actions.push(el('button', { class: 'btn btn-sm', onclick: () => {
@@ -211,7 +213,7 @@ function entry(e, isReversed, isRepaired) {
   return el('div', { class: 'entry' + (isReversed ? ' cancelled' : '') },
     c ? avatar(c.first_name, { size: 'xs' }) : el('span', { class: 'entry-dot', style: 'background:var(--muted)' }),
     el('div', { class: 'entry-main' },
-      el('div', { class: 'entry-cat' }, k.label || (e.kind === 'reward' ? (e.note || 'Échange') : 'Écriture'),
+      el('div', { class: 'entry-cat' }, label,
         isRepaired ? el('span', { class: 'muted' }, ' · réparé') : null),
       el('div', { class: 'entry-meta' }, meta)),
     el('span', { class: 'entry-pts ' + cls }, pts(e.points)),
@@ -237,7 +239,7 @@ async function loadPeriod() {
     const from = view === 'calendar' ? monthStart(cursor) : selectedDay;
     const to = view === 'calendar' ? monthEnd(cursor) : selectedDay;
     [daily, events, cats, children] = await Promise.all([
-      api.getDailyRange(from, to), api.getEventsRange(from, to), api.getCategories(), api.getChildren()
+      api.getDailyRange(from, to), api.getEventsRange(from, to), api.getCategoriesForHistory(), api.getChildren()
     ]);
     render();
   } catch (e) { fail(e); }

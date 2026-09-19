@@ -41,7 +41,8 @@ Air-Bartoli/
 │   ├── 05-hardening.sql        search_path et retrait des droits du rôle anon
 │   ├── 06-cinematic-settings.sql seuils des effets, par famille
 │   ├── 07-category-autonomy.sql suppression sûre des catégories
-│   ├── 08-automatic-boosters.sql boosters de régularité
+│   ├── 08-automatic-boosters.sql ancienne logique de boosters
+│   ├── 09-calendar-boosters.sql boosters calendaires configurables
 │   └── 99-parents-bootstrap.sql rattachement des comptes parents
 ├── Info IA/
 │   ├── handover.md          architecture, décisions, pièges (source unique)
@@ -138,7 +139,7 @@ Le moment de la journée est présélectionné d'après l'heure de Paris. La dat
 est modifiable pour rattraper une soirée oubliée, jamais vers le futur.
 
 La case « ajouter une note » transforme l'appui en petite fenêtre. Les
-catégories à points libres (`Exceptionnel`, `Régularité`) l'ouvrent toujours.
+La catégorie à points libres `Exceptionnel` ouvre toujours une note. Les boosters sont gérés séparément dans Réglages.
 
 
 ## Mode application et responsive mobile
@@ -216,7 +217,7 @@ Un point par action, figé au moment de la saisie. Un ordre de grandeur :
 | Aide ou console son frère | 3 |
 | Mot positif de la maîtresse | 5 |
 | Geste exceptionnel | 5 et plus, à la main |
-| Bonus de régularité (5 jours sur 7) | 5 |
+| Booster hebdomadaire | selon le réglage |
 | Il a fallu répéter trois fois | −2 |
 | Dispute | −2 |
 | Bagarre, coup | −4 |
@@ -340,10 +341,8 @@ Toutes ces vues sont alimentées par `v_category_profile` et `v_daily`.
 - **Dates en heure locale Europe/Paris**, jamais en UTC : une saisie à 23 h ne
   doit pas tomber sur la veille.
 - **Pas de saisie dans le futur**, contrainte au niveau de la base.
-- **Le bonus de régularité** n'est pas automatique : il s'accorde par un appel
-  à `grant_weekly_streak`, depuis les réglages ou par un `pg_cron` hebdomadaire.
-- **Les catégories `Exceptionnel`, `Régularité` et `Ajustement` ne se
-  renomment pas** : le code s'appuie sur leur libellé.
+- **Les boosters** sont calculés automatiquement à l'ouverture de l'application pour la dernière semaine et le dernier mois complets.
+- **Les catégories `Exceptionnel` et `Ajustement` ne se renomment pas** : le code s'appuie sur leur libellé. La catégorie historique `Régularité` est archivée par la migration des boosters.
 
 ## Sur la clé publiable dans un dépôt public
 
@@ -397,7 +396,7 @@ Depuis **Réglages → Catégories et barème**, chaque grande catégorie et cha
 
 La suppression est sûre pour le journal append-only : si une catégorie n'a jamais été utilisée, elle est supprimée physiquement. Si elle apparaît déjà dans l'historique, elle est retirée des menus et désactivée, mais les anciennes écritures restent intactes et consultables. Les catégories peuvent ensuite être recréées librement avec les libellés et sous-catégories souhaités.
 
-Le bonus hebdomadaire reste fonctionnel même si la catégorie technique de régularité est renommée ou retirée.
+Les boosters ne dépendent plus d’une catégorie `Régularité`. Ils sont enregistrés comme des événements de type `bonus_streak`, avec leur détail dans la note.
 
 
 ## Journal calendrier et saisie mobile
@@ -416,6 +415,6 @@ Sur la **Saisie**, les moments de la journée et les grandes catégories sont ma
 
 Dans la saisie, chaque enfant possède deux lectures de la journée. Le **résultat réel** peut être négatif, par exemple `-4`. Le **score compté** affiché en grand reste `0`, avec le message « encore 4 points pour revenir à zéro ». Les points suivants ne deviennent du score positif qu'après récupération de ce déficit.
 
-Le seuil d'un booster utilise la somme des scores comptés des journées de la période, sans inclure les anciens boosters. Les périodes actuellement disponibles sont une semaine calendaire et un mois calendaire. Depuis Réglages, le parent peut activer chaque période, définir le seuil entier et le coefficient à une décimale. Le déclenchement est immédiat dès que le seuil est atteint. Le booster est ajouté comme une entrée séparée, sans modifier les points des journées précédentes.
+Les périodes disponibles sont une semaine calendaire, du lundi au dimanche, et un mois calendaire, du premier au dernier jour du mois. Pour chaque période, Réglages permet de définir quatre valeurs : le minimum de points par jour, le nombre minimum de jours qui doivent atteindre ce seuil, le total minimum de points sur toute la période et le nombre de points attribués par le booster. Les trois conditions doivent être remplies.
 
-Avec un score de période de 37 et un coefficient de `1,2`, le total théorique est `44,4`, arrondi à `45`, donc le booster ajouté vaut `8` points.
+Le calcul est automatique à l'ouverture de l'application pour la dernière période complète. Une contrainte unique empêche un double versement si les deux parents ouvrent l'application. Le booster est ajouté comme une entrée séparée et ne réécrit jamais les journées précédentes.

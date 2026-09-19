@@ -7,15 +7,16 @@ import * as api from './api.js';
 import { el, toast, fail, modal, personLabel } from './ui.js';
 
 let root = null;
-let children = [], cats = [], rewards = [], special = [], cinematic = null, famille = null;
+let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, famille = null;
 const ETALON = 22;                      // points par semaine et par enfant
 
 const subs  = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
 
 async function reload() {
-  [children, cats, rewards, special, cinematic] = await Promise.all([
-    api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(), api.getCinematicSettings()]);
+  [children, cats, rewards, special, boosters, cinematic] = await Promise.all([
+    api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(),
+    api.getBoosterSettings(), api.getCinematicSettings()]);
   render();
 }
 
@@ -280,29 +281,52 @@ function render() {
           class: 'btn btn-sm', onclick: async () => { await api.remove('special_days', s.id); await reload(); }
         }, 'Retirer')))))) : null));
 
-  // --- bonus de regularite
-  const lundi = (() => {
-    const d = new Date(api.todayISO() + 'T12:00:00');
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7);          // lundi de la semaine passee
-    return new Intl.DateTimeFormat('fr-CA').format(d);
-  })();
-  const semaine = el('input', { type: 'date', value: lundi });
+  // --- boosters calendaires
+  function boosterForm(type, title, description, maxDays, setting) {
+    const active = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: setting?.active || false });
+    const daily = el('input', { type: 'number', min: '0', step: '1', value: String(setting?.daily_min_points ?? 2) });
+    const days = el('input', { type: 'number', min: '1', max: String(maxDays), step: '1', value: String(setting?.qualifying_days ?? (type === 'week' ? 5 : 20)) });
+    const total = el('input', { type: 'number', min: '1', step: '1', value: String(setting?.total_min_points ?? (type === 'week' ? 18 : 70)) });
+    const bonus = el('input', { type: 'number', min: '1', step: '1', value: String(setting?.bonus_points ?? 5) });
+    const error = el('p', { class: 'error', hidden: true });
+    const save = async () => {
+      const d = Number(daily.value), n = Number(days.value), t = Number(total.value), b = Number(bonus.value);
+      if (![d, n, t, b].every(Number.isInteger) || d < 0 || n < 1 || n > maxDays || t < 1 || b < 1) {
+        error.hidden = false;
+        error.textContent = 'Saisis des nombres entiers valides : jours entre 1 et ' + maxDays + ', points positifs.';
+        return;
+      }
+      error.hidden = true;
+      try {
+        await api.save('booster_settings', {
+          family_id: famille, period_type: type, active: active.checked,
+          daily_min_points: d, qualifying_days: n, total_min_points: t, bonus_points: b,
+          min_points: setting?.min_points ?? d, multiplier: setting?.multiplier ?? 1
+        });
+        await reload(); toast(title + ' enregistré.');
+      } catch (e) { fail(e); }
+    };
+    return el('div', { class: 'card', style: 'margin-top:12px' },
+      el('h3', {}, title),
+      el('p', { class: 'muted', style: 'margin-top:-6px' }, description),
+      el('label', { class: 'row', style: 'gap:8px;cursor:pointer' }, active,
+        el('span', { style: 'font-weight:400;color:var(--ink)' }, 'Activer ce booster')),
+      el('div', { class: 'fields' },
+        champ('Minimum par jour', daily),
+        champ('Nombre de jours minimum', days),
+        champ('Total minimum sur la période', total),
+        champ('Points du booster', bonus)),
+      error,
+      el('button', { class: 'btn btn-primary btn-sm', onclick: save }, 'Enregistrer'));
+  }
+  const weekBooster = boosters.find(b => b.period_type === 'week');
+  const monthBooster = boosters.find(b => b.period_type === 'month');
   app.append(el('div', { class: 'card' },
-    el('h2', {}, 'Bonus de régularité'),
+    el('h2', {}, 'Boosters'),
     el('p', { class: 'muted', style: 'margin-top:-6px' },
-      "+5 points à chaque enfant ayant gagné au moins 2 points sur 5 jours de la semaine. " +
-      "C'est l'horizon court dont le plus jeune a besoin : une semaine, pas trois mois. " +
-      "À lancer le dimanche soir ou le lundi."),
-    el('div', { class: 'row' }, champ('Lundi de la semaine', semaine),
-      el('button', {
-        class: 'btn btn-primary btn-sm', onclick: async () => {
-          try {
-            const n = await api.grantWeeklyStreak(semaine.value);
-            toast(n === 0 ? 'Personne ne remplit la condition cette semaine.'
-                          : n + ' bonus accordé' + (n > 1 ? 's' : '') + '.');
-          } catch (e) { fail(e); }
-        }
-      }, 'Accorder'))));
+      'Chaque booster est évalué automatiquement à l’ouverture de l’application pour la dernière période complète. Les trois conditions doivent être remplies : seuil quotidien sur un nombre minimum de jours, puis total minimum de points sur toute la période. Une journée plus faible peut donc être compensée, sans permettre deux journées totalement vides.'),
+    boosterForm('week', 'Booster semaine calendaire', 'Du lundi au dimanche. Exemple : au moins 2 points sur 5 jours et 18 points au total.', 7, weekBooster),
+    boosterForm('month', 'Booster mois calendaire', 'Du premier au dernier jour du mois.', 31, monthBooster)));
 }
 
 export async function mount(container, me) {

@@ -78,7 +78,7 @@ Vues : `v_child_balance`, `v_child_status`, `v_child_level`, `v_child_rate`,
 Aucun solde n'est stocké nulle part.
 
 Fonctions : `add_event`, `reverse_event`, `repair_event`,
-`request_redemption`, `approve_redemption`, `grant_weekly_streak`,
+`request_redemption`, `approve_redemption`, `apply_period_boosters`,
 plus les helpers `auth_family_id()` et `is_parent()`.
 
 `auth_family_id()` est `security definer` : sans cela, la politique RLS de
@@ -191,3 +191,7 @@ Le journal ne rend plus une longue liste unique. `historique.js` propose un cale
 Le score quotidien affiché est `max(gained + lost, 0)`, avec `lost` négatif dans `v_daily`. Les récompenses dépensées sont exclues de ce score pédagogique. Le ledger Supabase reste inchangé.
 
 La saisie utilise `daypart-grid` et `category-root-grid` pour éviter les chips horizontales sur téléphone.
+
+## Boosters calendaires
+
+Les réglages sont stockés dans `booster_settings`, avec une ligne `week` et une ligne `month` par famille. Chaque ligne porte `daily_min_points`, `qualifying_days`, `total_min_points` et `bonus_points`. `apply_period_boosters()` évalue la dernière période complète de chaque type et écrit au maximum un booster par enfant et par période, grâce à la contrainte unique de `booster_grants`. L'appel est lancé à l'ouverture de l'application, car le projet n'utilise pas de tâche cron active. La catégorie historique `Régularité` n'est plus nécessaire et est archivée sans toucher aux anciens événements.

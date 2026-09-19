@@ -86,11 +86,13 @@ const rows = async (q) => { const { data, error } = await q; if (error) throw er
 
 export const getChildren   = () => rows(sb.from('children').select('*').eq('active', true).order('sort_order'));
 export const getCategories = () => rows(sb.from('categories').select('*').eq('active', true).order('sort_order'));
+export const getCategoriesForHistory = () => rows(sb.from('categories').select('*').order('sort_order'));
 export const getRewards    = () => rows(sb.from('rewards').select('*').order('cost'));
 export const getBalances   = () => rows(sb.from('v_child_balance').select('*'));
 export const getLevels     = () => rows(sb.from('v_child_level').select('*'));
 export const getRates      = () => rows(sb.from('v_child_rate').select('*'));
 export const getEligibility= () => rows(sb.from('v_reward_eligibility').select('*'));
+export const getBoosterSettings = () => rows(sb.from('booster_settings').select('*').order('period_type'));
 export const getStatusLevels=() => rows(sb.from('status_levels').select('*').order('min_points'));
 export const getSpecialDays= () => rows(sb.from('special_days').select('*').order('day', { ascending: false }));
 export async function getCinematicSettings() {
@@ -144,7 +146,7 @@ export const repairEvent  = (id, note)   => rpc('repair_event',  { p_event_id: i
 export const requestRedemption = (reward_id, shares) =>
   rpc('request_redemption', { p_reward_id: reward_id, p_shares: shares });
 export const approveRedemption = (id) => rpc('approve_redemption', { p_redemption_id: id });
-export const grantWeeklyStreak = (weekStart) => rpc('grant_weekly_streak', { p_week_start: weekStart });
+export const applyPeriodBoosters = () => rpc('apply_period_boosters', {});
 export const deleteCategory = (category_id) => rpc('delete_category', { p_category_id: category_id });
 
 // Tables de parametrage : ecriture directe autorisee par la RLS.
