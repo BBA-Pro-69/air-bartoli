@@ -1,19 +1,23 @@
 // =====================================================================
-//  Saisie rapide. C'est la page qu'un parent ouvre le soir, debout,
-//  d'une main. Objectif : un point donne en deux appuis, jamais plus.
-//  Il n'y a pas de bouton "valider" : l'appui sur une tuile ecrit.
+//  Saisie rapide Air Bartoli.
+//  1. Score global actuel en tête
+//  2. Titre et règle
+//  3. Score de la journée sélectionnée + sélecteur de date
+//  4. Note de la journée (catégorie 'Journée', usage principal)
+//  5. Autres catégories (modal détaillée avec points ajustables et contextes)
+//  6. Historique de la journée avec bouton « Réparer » immédiat
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, toast, fail, undoBar, modal, personLabel } from './ui.js';
+import { el, pts, toast, fail, undoBar, modal, personLabel, avatar } from './ui.js';
 import { celebrate, celebrateMilestone } from './cinematics.js';
 
 let root = null;
 const $ = s => root.querySelector(s);
 
 let state = {
-  children: [], cats: [], balances: [], levels: [],
-  child: null, dayPart: api.currentDayPart(), date: api.todayISO(),
-  root: null, withNote: false
+  children: [], cats: [], balances: [], levels: [], contexts: [],
+  child: null, date: api.todayISO(),
+  dayEvents: []
 };
 
 const subs   = id => state.cats.filter(c => c.parent_id === id && c.active);
@@ -22,19 +26,35 @@ const bal    = id => (state.balances.find(b => b.child_id === id) || {}).balance
 const level  = id => state.levels.find(l => l.child_id === id) || {};
 
 async function refresh() {
-  [state.balances, state.levels] = await Promise.all([api.getBalances(), api.getLevels()]);
-  renderKids();
+  const [b, lv, evs] = await Promise.all([
+    api.getBalances(),
+    api.getLevels(),
+    api.getEventsRange(state.date, state.date)
+  ]);
+  state.balances = b;
+  state.levels = lv;
+  state.dayEvents = evs;
+
+  renderGlobalScores();
+  renderDayScoreHeader();
+  renderDayTiles();
+  renderOtherCategories();
+  renderDayHistory();
 }
 
 // ---------------------------------------------------------------------
-function renderKids() {
-  const box = $('#kids'); box.innerHTML = '';
+// 1. Score global actuel (tout en haut)
+// ---------------------------------------------------------------------
+function renderGlobalScores() {
+  const box = $('#globalKids');
+  if (!box) return;
+  box.innerHTML = '';
   state.children.forEach(c => {
     const lv = level(c.id);
     box.append(el('button', {
       class: 'kid' + (state.child === c.id ? ' on' : ''),
       style: `--kid:${c.color}`,
-      onclick: () => { state.child = c.id; renderKids(); renderTiles(); }
+      onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
       el('div', { class: 'kid-name' }, personLabel(c.first_name, { size: 'sm' })),
       el('div', { class: 'kid-balance', style: `color:${c.color}` }, String(bal(c.id))),
@@ -43,165 +63,288 @@ function renderKids() {
   });
 }
 
-function renderChips() {
-  const dp = $('#dayparts'); dp.innerHTML = '';
-  api.DAY_PARTS.forEach(p => dp.append(el('button', {
-    class: 'daypart-card' + (state.dayPart === p.code ? ' on' : ''),
-    onclick: () => { state.dayPart = p.code; renderChips(); }
-  },
-    el('span', { class: 'daypart-icon' }, ({ matin: '☀️', ecole: '📚', midi: '🍽️', gouter: '🍎', soir: '🌙', nuit: '✨' })[p.code] || '•'),
-    el('span', { class: 'daypart-label' }, p.label))));
+// ---------------------------------------------------------------------
+// 3. Score de la journée + sélecteur de date
+// ---------------------------------------------------------------------
+function computeDayStats(childId) {
+  const evs = state.dayEvents.filter(e => e.child_id === childId);
+  const gained = evs.reduce((sum, e) => sum + (e.points > 0 ? e.points : 0), 0);
+  const lost = evs.reduce((sum, e) => sum + (e.points < 0 ? Math.abs(e.points) : 0), 0);
+  const net = gained - lost;
+  return { gained, lost, net };
+}
 
-  const rt = $('#roots'); rt.innerHTML = '';
-  roots().forEach(r => {
-    if (!subs(r.id).length) return;              // les racines sans enfant sont des raccourcis
-    rt.append(el('button', {
-      class: 'category-root-card' + (state.root === r.id ? ' on' : ''),
-      onclick: () => { state.root = r.id; renderChips(); renderTiles(); }
+function renderDayScoreHeader() {
+  const container = $('#dayScoresBox');
+  if (!container) return;
+  container.innerHTML = '';
+
+  state.children.forEach(c => {
+    const stats = computeDayStats(c.id);
+    const isSelected = state.child === c.id;
+    container.append(el('div', {
+      class: 'day-score-badge' + (isSelected ? ' active' : ''),
+      style: `--kid:${c.color};cursor:pointer`,
+      onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      el('strong', {}, r.label),
-      el('span', {}, subs(r.id).length + ' choix')));
+      avatar(c.first_name, { size: 'xs', title: c.first_name }),
+      el('span', { class: 'name' }, c.first_name),
+      el('strong', { class: stats.net >= 0 ? 'pos' : 'neg' }, (stats.net > 0 ? '+' : '') + stats.net + ' pt' + (Math.abs(stats.net) > 1 ? 's' : ''))));
   });
 }
 
-function renderTiles() {
-  const box = $('#tiles'); box.innerHTML = '';
-  if (!state.child) { box.append(el('p', { class: 'muted' }, "Choisir d'abord un enfant.")); return; }
-  const list = subs(state.root);
-  list.forEach(c => box.append(tile(c)));
+// ---------------------------------------------------------------------
+// 4. Note de la journée (catégorie racine "Journée" ou équivalent)
+// ---------------------------------------------------------------------
+function renderDayTiles() {
+  const box = $('#dayTiles');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!state.child) {
+    box.append(el('p', { class: 'muted' }, 'Choisir d\'abord un enfant.'));
+    return;
+  }
 
-  const shortcuts = $('#shortcuts'); shortcuts.innerHTML = '';
-  roots().filter(r => !subs(r.id).length)
-    .forEach(r => shortcuts.append(tile(r, true)));
+  // Chercher la racine "Journée"
+  const dayRoot = roots().find(r => r.label.toLowerCase() === 'journée' || r.label.toLowerCase() === 'journee');
+  const daySubs = dayRoot ? subs(dayRoot.id) : [];
+
+  if (daySubs.length) {
+    daySubs.forEach(c => box.append(tile(c, false, null)));
+  } else {
+    // Si pas de sous-catégories, proposer les raccourcis bonus/malus par défaut
+    box.append(
+      el('button', {
+        class: 'tile tile-bonus',
+        onclick: ev => openDetailedModal(dayRoot || { label: 'Journée réussie', kind: 'bonus', default_points: 3 }, 3)
+      },
+        el('span', { class: 'tile-label' }, 'Journée réussie'),
+        el('span', { class: 'tile-pts' }, '+3 pts')),
+      el('button', {
+        class: 'tile tile-malus',
+        onclick: ev => openDetailedModal(dayRoot || { label: 'Journée difficile', kind: 'malus', default_points: 3 }, 3)
+      },
+        el('span', { class: 'tile-label' }, 'Journée difficile'),
+        el('span', { class: 'tile-pts' }, '-3 pts')));
+  }
 }
 
-function tile(cat, free = false) {
+function tile(cat, free = false, context = null) {
   const malus = cat.kind === 'malus';
   const p = malus ? -Math.abs(cat.default_points) : cat.default_points;
   return el('button', {
     class: 'tile ' + (malus ? 'tile-malus' : 'tile-bonus'),
-    onclick: ev => (free || state.withNote) ? askThenWrite(cat, free) : write(cat, null, null, ev.currentTarget)
+    onclick: ev => write(cat, free ? null : p, null, context, ev.currentTarget)
   },
     el('span', { class: 'tile-label' }, cat.label),
     el('span', { class: 'tile-pts' }, free ? 'au choix' : pts(p)));
 }
 
-// Saisie avec note, ou points libres pour les categories "au choix".
-function askThenWrite(cat, free) {
-  const points = el('input', { type: 'number', value: String(cat.default_points), min: '1', max: '50' });
-  const note   = el('input', { type: 'text', placeholder: 'Ce qui s\'est passé (facultatif)' });
+// ---------------------------------------------------------------------
+// 5. Autres catégories (carte détaillée avec sous-catégories et contextes)
+// ---------------------------------------------------------------------
+function renderOtherCategories() {
+  const container = $('#otherCatsButtons');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const dayRoot = roots().find(r => r.label.toLowerCase() === 'journée' || r.label.toLowerCase() === 'journee');
+  const otherRoots = roots().filter(r => !dayRoot || r.id !== dayRoot.id);
+
+  otherRoots.forEach(r => {
+    container.append(el('button', {
+      class: 'chip',
+      style: 'min-height:44px;padding:9px 16px;font-weight:600',
+      onclick: () => openDetailedModal(r)
+    }, r.label));
+  });
+}
+
+function openDetailedModal(category) {
+  const subList = subs(category.id);
+  const hasSubs = subList.length > 0;
+
+  let currentSub = hasSubs ? subList[0] : category;
+
+  const subSelect = el('select', {
+    disabled: !hasSubs,
+    onchange: e => {
+      currentSub = subList.find(s => s.id === e.target.value) || category;
+      pointsInput.value = String(currentSub.default_points || 1);
+    }
+  },
+    hasSubs
+      ? subList.map(s => el('option', { value: s.id }, s.label))
+      : [el('option', { value: category.id }, category.label)]);
+
+  const pointsInput = el('input', {
+    type: 'number',
+    min: '1',
+    max: '50',
+    value: String(currentSub.default_points || 1)
+  });
+
+  // Liste des contextes / moments de la journée
+  const contextSelect = el('select', {},
+    el('option', { value: '' }, 'Toute la journée (général)'),
+    ...state.contexts.map(ctx => el('option', { value: ctx.label }, ctx.label)));
+
+  const noteInput = el('input', {
+    type: 'text',
+    placeholder: 'Précision sur ce qui s\'est passé (facultatif)'
+  });
+
   const body = el('div', {},
-    free ? el('div', { class: 'field' }, el('label', {}, 'Points'), points) : null,
-    el('div', { class: 'field' }, el('label', {}, 'Note'), note));
-  modal(cat.label, body, [{
-    label: 'Enregistrer', class: 'btn-primary',
-    onClick: close => { close(); write(cat, free ? Number(points.value) : null, note.value, null); }
+    el('div', { class: 'field' }, el('label', {}, 'Sous-catégorie'), subSelect),
+    el('div', { class: 'fields' },
+      el('div', { class: 'field' }, el('label', {}, 'Points attribués'), pointsInput),
+      el('div', { class: 'field' }, el('label', {}, 'Moment / Contexte'), contextSelect)),
+    el('div', { class: 'field' }, el('label', {}, 'Note'), noteInput));
+
+  modal(category.label, body, [{
+    label: 'Enregistrer',
+    class: 'btn-primary',
+    onClick: async close => {
+      const p = Number(pointsInput.value) || currentSub.default_points || 1;
+      const note = noteInput.value.trim() || null;
+      const context = contextSelect.value || null;
+      close();
+      await write(currentSub, p, note, context, null);
+    }
   }]);
 }
 
-async function write(cat, points, note, origin = null) {
+// ---------------------------------------------------------------------
+// Écriture d'un événement
+// ---------------------------------------------------------------------
+async function write(cat, points, note, context = null, origin = null) {
   try {
-    const ev = await api.addEvent(state.child, cat.id, points, state.date, state.dayPart, note);
-    const child = state.children.find(c => c.id === state.child);
-    // La cinématique part dès que la base confirme le nombre réel de points.
-    // Le barème n'est donc jamais dupliqué dans le front.
+    const ev = await api.addEvent(state.child, cat.id, points, state.date, context, note);
+    const kidObj = state.children.find(c => c.id === state.child);
     celebrate(ev.points, origin, cat.label);
     await refresh();
+
     if (ev.points === 0 && cat.kind === 'malus') {
-      toast(child.first_name + ' est déjà à 0 : rien retiré, mais c\'est noté.', 'ok', 5000);
+      toast(kidObj.first_name + ' est déjà à 0 : rien retiré, mais c\'est noté.', 'ok', 5000);
     } else {
-      toast(child.first_name + ' · ' + cat.label + ' · ' + pts(ev.points));
+      toast(kidObj.first_name + ' · ' + cat.label + ' · ' + pts(ev.points));
     }
+
     undoBar(cat.label + ' ' + pts(ev.points), async () => {
-      try { await api.reverseEvent(ev.id, 'Annulé dans les 10 secondes'); await refresh(); toast('Annulé.'); }
-      catch (e) { fail(e); }
+      try {
+        await api.reverseEvent(ev.id, 'Annulé dans les 10 secondes');
+        await refresh();
+        toast('Annulé.');
+      } catch (e) { fail(e); }
     });
   } catch (e) { fail(e); }
 }
 
 // ---------------------------------------------------------------------
-// Demandes d'echange en attente : c'est ici qu'un parent valide.
+// 6. Historique de la journée avec bouton « Réparer » immédiat
 // ---------------------------------------------------------------------
-async function renderPending() {
-  const box = $('#pending'); box.innerHTML = '';
-  const list = await api.getPendingRedemptions();
-  if (!list.length) { box.parentElement.style.display = 'none'; return; }
-  box.parentElement.style.display = '';
-  list.forEach(r => {
-    const who = r.redemption_shares.map(s => {
-      const c = state.children.find(x => x.id === s.child_id);
-      return (c ? c.first_name : '?') + ' ' + s.points;
-    }).join(' · ');
-    box.append(el('div', { class: 'entry' },
+function renderDayHistory() {
+  const box = $('#dayHistoryEntries');
+  if (!box) return;
+  box.innerHTML = '';
+
+  const evs = state.dayEvents.filter(e => e.child_id === state.child);
+  if (!evs.length) {
+    box.append(el('p', { class: 'muted' }, 'Aucune saisie enregistrée sur cette date pour cet enfant.'));
+    return;
+  }
+
+  // Drapeaux contrepassé / réparé
+  const reversed = new Set(evs.filter(e => e.reverses_id).map(e => e.reverses_id));
+  const repaired = new Set(evs.filter(e => e.repairs_id).map(e => e.repairs_id));
+
+  evs.forEach(e => {
+    const isRev = reversed.has(e.id);
+    const isRep = repaired.has(e.id);
+    const catLabel = e.categories?.label || (e.kind === 'booster' || e.kind === 'bonus_streak' ? 'Booster' : (e.kind === 'reward' ? 'Récompense' : 'Saisie'));
+    const meta = [e.day_part, e.note].filter(Boolean).join(' · ');
+
+    const canRepair = e.points < 0 && e.categories?.repairable && !isRev && !isRep;
+
+    box.append(el('div', { class: 'entry' + (isRev ? ' cancelled' : '') },
       el('div', { class: 'entry-main' },
-        el('div', { class: 'entry-cat' }, r.rewards.label),
-        el('div', { class: 'entry-meta' }, r.cost_total + ' pts · ' + who)),
-      el('button', {
-        class: 'btn btn-sm btn-primary', onclick: async () => {
+        el('div', { class: 'entry-cat' }, catLabel),
+        el('div', { class: 'entry-meta' }, meta || 'Sans précision')),
+      el('strong', { class: 'entry-pts ' + (e.points >= 0 ? 'pos' : 'neg') }, (e.points > 0 ? '+' : '') + e.points),
+      canRepair ? el('button', {
+        class: 'btn btn-sm btn-primary',
+        style: 'margin-left:8px',
+        onclick: async () => {
           try {
-            await api.approveRedemption(r.id);
-            celebrateMilestone('🎁 ' + r.rewards.label);
-            toast('Échange validé. Bon vol.');
-            await refresh(); renderPending();
-          }
-          catch (e) { fail(e); }
+            await api.repairEvent(e.id, 'Réparé depuis la saisie');
+            toast('Malus réparé (+50 % récupérés).');
+            await refresh();
+          } catch (err) { fail(err); }
         }
-      }, 'Valider'),
-      el('button', {
-        class: 'btn btn-sm', onclick: async () => {
-          await api.update('redemptions', r.id, { state: 'refused', decided_at: new Date().toISOString() });
-          toast('Demande refusée.'); renderPending();
-        }
-      }, 'Refuser')));
+      }, 'Réparer') : null));
   });
 }
 
+// ---------------------------------------------------------------------
+// Montée et actualisation de la vue
 // ---------------------------------------------------------------------
 export async function mount(container) {
   root = container;
   root.innerHTML = '';
   root.append(
-    el('h1', {}, 'Saisie'),
-    el('p', { class: 'muted' }, "Un appui sur une tuile enregistre tout de suite. Dix secondes pour revenir en arrière."),
-    el('div', { class: 'card' }, el('div', { class: 'kids', id: 'kids' })),
+    // 1. Score global actuel
+    el('div', { class: 'section-divider', style: 'margin-top:6px' }, el('span', {}, 'Score global actuel')),
+    el('div', { class: 'card' }, el('div', { class: 'kids', id: 'globalKids' })),
+
+    // 2. Titre et règle
+    el('h1', { style: 'margin-top:18px' }, 'Saisie'),
+    el('p', { class: 'muted', style: 'margin-top:-4px;line-height:1.5' },
+      'Un appui sur une tuile enregistre tout de suite.', el('br', {}),
+      'Dix secondes pour revenir en arrière.'),
+
+    // 3. Score de la journée + Sélecteur de date
+    el('div', { class: 'section-divider' }, el('span', {}, 'Score de la journée')),
     el('div', { class: 'card' },
-      el('div', { class: 'row', style: 'margin-bottom:10px' },
-        el('h2', { style: 'margin:0' }, 'Quand ?'),
-        el('div', { class: 'spacer' }),
+      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+        el('div', { class: 'row', id: 'dayScoresBox', style: 'gap:8px' }),
         el('input', {
-          type: 'date', id: 'date', value: state.date, max: state.date,
-          style: 'width:auto', onchange: e => { state.date = e.target.value; }
-        })),
-      el('div', { class: 'daypart-grid', id: 'dayparts' })),
+          type: 'date', id: 'saisieDate', value: state.date, max: state.date,
+          style: 'width:auto;min-height:38px;padding:6px 10px',
+          onchange: async e => { state.date = e.target.value; await refresh(); }
+        }))),
+
+    // 4. Note de la journée (catégorie 'Journée')
+    el('div', { class: 'section-divider' }, el('span', {}, 'Note de la journée')),
     el('div', { class: 'card' },
-      el('div', { class: 'row', style: 'margin-bottom:10px' },
-        el('h2', { style: 'margin:0' }, 'Quoi ?'),
-        el('div', { class: 'spacer' }),
-        el('label', { class: 'row', style: 'gap:6px;margin:0;cursor:pointer' },
-          el('input', {
-            type: 'checkbox', style: 'width:auto;min-height:auto',
-            onchange: e => { state.withNote = e.target.checked; }
-          }), 'Ajouter une note')),
-      el('div', { class: 'category-root-grid', id: 'roots', style: 'margin-bottom:12px' }),
-      el('div', { class: 'tiles category-tile-grid', id: 'tiles' })),
+      el('div', { class: 'tiles category-tile-grid', id: 'dayTiles' })),
+
+    // 5. Autres catégories
+    el('div', { class: 'section-divider' }, el('span', {}, 'Autres catégories')),
     el('div', { class: 'card' },
-      el('h2', {}, 'Raccourcis'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Des raccourcis rapides, à points libres.'),
-      el('div', { class: 'tiles', id: 'shortcuts' })),
-    el('div', { class: 'card', style: 'display:none' },
-      el('h2', {}, 'Échanges à valider'), el('div', { id: 'pending' })));
+      el('p', { class: 'muted', style: 'margin-top:-4px;margin-bottom:12px' },
+        'Choisis une catégorie pour préciser le moment et ajuster les points :'),
+      el('div', { class: 'chips', id: 'otherCatsButtons' })),
+
+    // 6. Historique de la journée
+    el('div', { class: 'section-divider' }, el('span', {}, 'Historique de la journée')),
+    el('div', { class: 'card' },
+      el('div', { id: 'dayHistoryEntries' })));
 
   try {
-    [state.children, state.cats] = await Promise.all([api.getChildren(), api.getCategories()]);
+    const [children, cats, contexts] = await Promise.all([
+      api.getChildren(),
+      api.getCategories(),
+      api.getContexts().catch(() => [])
+    ]);
+    state.children = children;
+    state.cats = cats;
+    state.contexts = contexts;
     state.child = state.children[0]?.id || null;
-    state.root  = roots().find(r => subs(r.id).length)?.id || null;
     await refresh();
-    renderChips(); renderTiles(); renderPending();
   } catch (e) { fail(e); }
 }
 
 export async function refreshView() {
   if (!root) return;
-  try { await refresh(); renderTiles(); renderPending(); } catch (e) { fail(e); }
+  try { await refresh(); } catch (e) { fail(e); }
 }

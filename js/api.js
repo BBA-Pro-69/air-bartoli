@@ -95,6 +95,7 @@ export const getEligibility= () => rows(sb.from('v_reward_eligibility').select('
 export const getBoosterSettings = () => rows(sb.from('booster_settings').select('*').order('period_type'));
 export const getStatusLevels=() => rows(sb.from('status_levels').select('*').order('min_points'));
 export const getSpecialDays= () => rows(sb.from('special_days').select('*').order('day', { ascending: false }));
+export const getContexts   = () => rows(sb.from('custom_contexts').select('*').eq('active', true).order('sort_order'));
 export async function getCinematicSettings() {
   const { data, error } = await sb.from('cinematic_settings').select('*').maybeSingle();
   if (error) throw error;

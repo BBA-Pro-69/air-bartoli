@@ -7,16 +7,16 @@ import * as api from './api.js';
 import { el, toast, fail, modal, personLabel } from './ui.js';
 
 let root = null;
-let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, famille = null, currentTheme = 'categories';
+let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], famille = null, currentTheme = 'categories';
 const ETALON = 22;                      // points par semaine et par enfant
 
 const subs  = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
 
 async function reload() {
-  [children, cats, rewards, special, boosters, cinematic] = await Promise.all([
+  [children, cats, rewards, special, boosters, cinematic, contexts] = await Promise.all([
     api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(),
-    api.getBoosterSettings(), api.getCinematicSettings()]);
+    api.getBoosterSettings(), api.getCinematicSettings(), api.getContexts().catch(() => [])]);
   render();
 }
 
@@ -315,6 +315,43 @@ function render() {
         } catch (e) { fail(e); }
       }}, 'Enregistrer les seuils'));
     app.append(fxCard);
+
+    // --- contextes et moments personnalisés
+    const newContextInput = el('input', { type: 'text', placeholder: 'Ex: Chez papi et mamie, Avec maman…' });
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Moments & contextes de journée'),
+      el('p', { class: 'muted', style: 'margin-top:-6px' },
+        'Personnalise les moments proposés dans la liste déroulante lors de la saisie d\'une action.'),
+      el('div', { class: 'row', style: 'gap:8px;margin-bottom:12px' },
+        newContextInput,
+        el('button', {
+          class: 'btn btn-primary btn-sm', onclick: async () => {
+            const val = newContextInput.value.trim();
+            if (!val) return;
+            try {
+              await api.insert('custom_contexts', {
+                family_id: famille, label: val, sort_order: contexts.length + 1
+              });
+              newContextInput.value = '';
+              await reload();
+              toast('Contexte ajouté.');
+            } catch (e) { fail(e); }
+          }
+        }, 'Ajouter')),
+      contexts.length ? el('div', { class: 'chips' },
+        ...contexts.map(ctx => el('div', { class: 'chip', style: 'display:inline-flex;align-items:center;gap:8px' },
+          el('span', {}, ctx.label),
+          el('button', {
+            type: 'button',
+            style: 'border:0;background:transparent;cursor:pointer;color:var(--red);font-weight:700',
+            onclick: async () => {
+              try {
+                await api.remove('custom_contexts', ctx.id);
+                await reload();
+                toast('Contexte retiré.');
+              } catch (e) { fail(e); }
+            }
+          }, '×')))) : el('p', { class: 'muted' }, 'Aucun contexte configuré.')));
 
     // --- jours speciaux
     const jour = el('input', { type: 'date', value: api.todayISO() });

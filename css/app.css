@@ -659,3 +659,9 @@ body.menu-open{overflow:hidden}
 .section-divider{display:flex;align-items:center;margin:22px 0 10px;text-align:center}
 .section-divider::before,.section-divider::after{content:'';flex:1;height:1px;background:var(--line)}
 .section-divider span{padding:0 12px;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
+
+/* ---- badges score de journee (page saisie) ---- */
+.day-score-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-size:.88rem;transition:all .15s}
+.day-score-badge.active{border-color:var(--kid,var(--cyan));box-shadow:0 0 0 3px color-mix(in srgb,var(--kid,var(--cyan)) 16%,transparent)}
+.day-score-badge .name{font-weight:600;color:var(--ink)}
+.day-score-badge strong{font-size:.95rem}
