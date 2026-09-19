@@ -1,14 +1,20 @@
 // =====================================================================
 //  Ecran Récompenses (🎁).
-//  Solde en grand, points à dépenser, sous-onglets compacts.
-//  Bouton large « Donner cette récompense » pour valider immédiatement.
+//  1. Bandeau photo XL et solde de points
+//  2. Séparateur avec titre centré
+//  3. Choix principal : « À gagner » ou « Historique des récompenses »
+//  4. Si « À gagner » : sous-onglets « Pour toi » / « Ensemble »
+//  5. Si « Historique » : récompenses obtenues avec bouton Annuler
 // =====================================================================
 import * as api from './api.js';
 import { el, pts, toast, fail, modal, gauge, personLabel, undoBar, avatar } from './ui.js';
 import { celebrateMilestone } from './cinematics.js';
 
 let root = null;
-let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], current = null, currentTab = 'individual';
+let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], rewardHistory = [];
+let current = null;
+let mainSection = 'catalog'; // 'catalog' | 'history'
+let currentTab = 'individual'; // 'individual' | 'collective'
 
 const bal   = id => (balances.find(b => b.child_id === id) || {}).balance ?? 0;
 const rate  = id => (rates.find(r => r.child_id === id) || {}).weekly_rate ?? 0;
@@ -16,9 +22,19 @@ const level = id => levels.find(l => l.child_id === id) || {};
 const kid   = id => children.find(c => c.id === id) || {};
 
 async function load() {
-  [children, levels, balances, rewards, elig, rates] = await Promise.all([
+  const [c, lv, b, rw, elg, rt, evs] = await Promise.all([
     api.getChildren(), api.getLevels(), api.getBalances(),
-    api.getRewards(), api.getEligibility(), api.getRates()]);
+    api.getRewards(), api.getEligibility(), api.getRates(),
+    api.getEvents(120)
+  ]);
+  children = c;
+  levels = lv;
+  balances = b;
+  rewards = rw;
+  elig = elg;
+  rates = rt;
+  rewardHistory = evs.filter(e => e.kind === 'reward');
+
   if (!current) current = children[0]?.id;
 }
 
@@ -31,10 +47,15 @@ function etaText(days) {
   return 'dans environ ' + w + ' semaines';
 }
 
+function divider(title) {
+  return el('div', { class: 'section-divider' }, el('span', {}, title));
+}
+
 function render() {
   const c = kid(current), lv = level(current), b = bal(current);
   const app = root; app.innerHTML = '';
 
+  // Sélecteur d'enfant (photos seules, centrées)
   app.append(el('div', { class: 'chips', style: 'margin-bottom:14px;justify-content:center;gap:14px' },
     ...children.map(k => el('button', {
       class: 'chip' + (k.id === current ? ' on' : ''),
@@ -42,14 +63,40 @@ function render() {
       onclick: () => { current = k.id; render(); }
     }, avatar(k.first_name, { size: 'md', title: k.first_name })))));
 
-  // --- bandeau synthétique : grande photo et solde de points uniquement
+  // Bandeau synthétique : photo XL et solde de points
   app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046);padding:24px 16px;text-align:center` },
     el('div', { style: 'display:flex;justify-content:center;margin-bottom:10px' },
       avatar(c.first_name, { size: 'xl', title: c.first_name })),
     el('div', { class: 'hero-balance', style: 'font-size:3rem;line-height:1;margin-top:4px' }, String(b)),
     el('div', { class: 'hero-sub', style: 'font-size:1rem;font-weight:600;opacity:.9' }, 'points à dépenser')));
 
-  // --- sous-onglets horizontaux segmentés (Pour toi / Ensemble / Mon rythme)
+  // Séparateur avec titre centré
+  app.append(divider('Récompenses'));
+
+  // Menu principal : « À gagner » vs « Historique des récompenses »
+  const mainTabs = [
+    { id: 'catalog', label: '🎁 Récompenses à gagner' },
+    { id: 'history', label: '📜 Récompenses acquises' }
+  ];
+
+  app.append(el('div', { class: 'chips', style: 'margin-bottom:16px;justify-content:center;gap:10px' },
+    ...mainTabs.map(t => el('button', {
+      class: 'chip' + (mainSection === t.id ? ' on' : ''),
+      style: 'font-weight:700',
+      onclick: () => { mainSection = t.id; render(); }
+    }, t.label))));
+
+  if (mainSection === 'catalog') {
+    renderCatalogSection(app);
+  } else {
+    renderHistorySection(app);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Section « Récompenses à gagner » (Catalogue)
+// ---------------------------------------------------------------------
+function renderCatalogSection(app) {
   const indRewards = rewards.filter(r => r.scope === 'individual' && r.active);
   const colRewards = rewards.filter(r => r.scope === 'collective' && r.active);
 
@@ -120,7 +167,6 @@ function collectiveCard(r) {
     }, '🎁 Donner cette sortie collective') : null);
 }
 
-// Repartition collective et attribution directe
 function splitModal(r) {
   const total = children.reduce((s, c) => s + bal(c.id), 0);
   let parts = children.map(c => Math.max(r.min_per_child, Math.round(r.cost * bal(c.id) / total)));
@@ -154,7 +200,6 @@ function splitModal(r) {
 }
 
 async function giveDirect(r, shares) {
-  // Calcul des impacts
   const c = kid(current);
   const curBal = bal(current);
   const sharePts = shares.find(s => s.child_id === current)?.points || r.cost;
@@ -188,7 +233,6 @@ async function giveDirect(r, shares) {
         render();
         toast('Récompense « ' + r.label + ' » attribuée !', 'ok', 6000);
 
-        // Bandeau d'annulation 10 secondes
         undoBar('Récompense « ' + r.label + ' » (-' + sharePts + ' pts)', async () => {
           try {
             await api.cancelRedemption(red.id, 'Annulé dans les 10 secondes');
@@ -198,6 +242,75 @@ async function giveDirect(r, shares) {
           } catch (err) { fail(err); }
         }, 10);
       } catch (e) { fail(e); }
+    }
+  }]);
+}
+
+// ---------------------------------------------------------------------
+// Section « Historique des récompenses acquises »
+// ---------------------------------------------------------------------
+function renderHistorySection(app) {
+  // Filtrer pour l'enfant en cours
+  const childRewards = rewardHistory.filter(e => e.child_id === current);
+  const totalSpent = childRewards.reduce((sum, e) => sum + Math.abs(Number(e.points || 0)), 0);
+
+  app.append(el('div', { class: 'card', style: 'background:#fefce8;border-color:#fef08a;margin-bottom:14px' },
+    el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+      el('div', {},
+        el('h2', { style: 'margin:0;color:var(--navy)' }, 'Total des récompenses acquises'),
+        el('p', { class: 'muted', style: 'margin:2px 0 0' }, childRewards.length + ' récompense' + (childRewards.length > 1 ? 's' : '') + ' prise' + (childRewards.length > 1 ? 's' : ''))),
+      el('div', { class: 'journal-booster-total', style: 'background:#fef08a;color:#854d0e' },
+        el('strong', {}, '-' + totalSpent),
+        el('span', {}, 'points')))));
+
+  app.append(el('div', { class: 'card' },
+    el('h2', {}, 'Historique des récompenses obtenues'),
+    childRewards.length
+      ? el('div', { class: 'journal-events', style: 'margin-top:12px' },
+          ...childRewards.map(e => {
+            const rewardName = e.note ? e.note.replace(/^Echange : /, '') : 'Récompense';
+            const refundPts = Math.abs(Number(e.points || 0));
+            return el('div', { class: 'entry' },
+              el('span', { class: 'entry-dot', style: `background:${kid(current).color || 'var(--line)'}` }),
+              el('div', { class: 'entry-main' },
+                el('div', { class: 'entry-cat' }, '🎁 ' + rewardName),
+                el('div', { class: 'entry-meta' }, api.formatDate(e.event_date))),
+              el('strong', { class: 'entry-pts neg' }, '-' + refundPts + ' pts'),
+              el('button', {
+                class: 'btn btn-sm btn-danger',
+                style: 'margin-left:10px',
+                onclick: () => confirmCancelInEnfant(e, rewardName, refundPts)
+              }, 'Annuler'));
+          }))
+      : el('p', { class: 'muted' }, 'Aucune récompense acquise pour le moment.')));
+}
+
+function confirmCancelInEnfant(e, rewardName, refundPts) {
+  const c = kid(current);
+  const body = el('div', {},
+    el('p', { style: 'font-size:1.05rem;line-height:1.5' },
+      'Veux-tu annuler la récompense ',
+      el('strong', {}, rewardName), ' et restituer ',
+      el('strong', {}, '+' + refundPts + ' points'), ' à ',
+      el('strong', {}, c.first_name || 'l\'enfant'), ' ?'),
+    el('p', { class: 'muted', style: 'margin-top:8px' },
+      'Une écriture de restitution sera ajoutée et le solde sera mis à jour.'));
+
+  modal('Annuler la récompense', body, [{
+    label: 'Confirmer l\'annulation',
+    class: 'btn-danger',
+    onClick: async close => {
+      close();
+      try {
+        if (e.redemption_id) {
+          await api.cancelRedemption(e.redemption_id, 'Annulation de récompense');
+        } else {
+          await api.reverseEvent(e.id, 'Annulation de récompense');
+        }
+        toast('Récompense annulée (+ ' + refundPts + ' pts restitués).');
+        await load();
+        render();
+      } catch (err) { fail(err); }
     }
   }]);
 }
