@@ -3,7 +3,7 @@
 //  Organisation ergonomique par périodes et par thématiques visuelles.
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, fail, divergingBars, lineChart, personLabel } from './ui.js';
+import { el, pts, fail, divergingBars, lineChart, personLabel, avatar } from './ui.js';
 
 let root = null;
 let children = [], profile = [], daily = [], levels = [], rates = [], balances = [];

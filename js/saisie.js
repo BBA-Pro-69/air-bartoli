@@ -51,12 +51,13 @@ function renderGlobalScores() {
   state.children.forEach(c => {
     box.append(el('button', {
       class: 'kid' + (state.child === c.id ? ' on' : ''),
-      style: `--kid:${c.color};display:flex;flex-direction:column;align-items:center;padding:12px;gap:8px`,
+      style: `--kid:${c.color};display:flex;flex-direction:column;align-items:center;padding:14px 10px;gap:6px`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      avatar(c.first_name, { size: 'lg', title: c.first_name }),
-      el('div', { class: 'kid-balance', style: `color:${c.color};margin:0;font-size:2.2rem;line-height:1` }, String(bal(c.id))),
-      el('span', { class: 'muted', style: 'font-size:.82rem;font-weight:600' }, 'points')));
+      avatar(c.first_name, { size: 'xl', title: c.first_name }),
+      el('strong', { style: 'font-size:1.05rem;color:var(--ink);margin-top:2px' }, c.first_name),
+      el('div', { class: 'kid-balance', style: `color:${c.color};margin:2px 0 0;font-size:2.2rem;line-height:1` }, String(bal(c.id))),
+      el('span', { class: 'muted', style: 'font-size:.8rem;font-weight:600' }, 'points')));
   });
 }
 
@@ -84,8 +85,9 @@ function renderDayScoreHeader() {
       style: `--kid:${c.color};cursor:pointer`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      avatar(c.first_name, { size: 'sm', title: c.first_name }),
-      el('strong', { class: stats.net >= 0 ? 'pos' : 'neg', style: 'font-size:1.05rem;margin-left:4px' },
+      avatar(c.first_name, { size: 'xs', title: c.first_name }),
+      el('span', { class: 'name', style: 'font-weight:600;font-size:.9rem;color:var(--ink)' }, c.first_name),
+      el('strong', { class: stats.net >= 0 ? 'pos' : 'neg', style: 'font-size:.98rem;margin-left:2px' },
         (stats.net > 0 ? '+' : '') + stats.net + ' pt' + (Math.abs(stats.net) > 1 ? 's' : ''))));
   });
 }

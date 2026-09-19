@@ -4,7 +4,7 @@
 //  Bouton large « Donner cette récompense » pour valider immédiatement.
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, toast, fail, modal, gauge, personLabel, undoBar } from './ui.js';
+import { el, pts, toast, fail, modal, gauge, personLabel, undoBar, avatar } from './ui.js';
 import { celebrateMilestone } from './cinematics.js';
 
 let root = null;
