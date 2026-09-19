@@ -65,11 +65,9 @@ function render() {
     { id: 'status',     label: 'Mon rythme' }
   ];
 
-  app.append(el('div', { class: 'subtabs-bar', role: 'tablist', style: 'margin-bottom:14px' },
+  app.append(el('div', { class: 'chips', style: 'margin-bottom:14px' },
     ...subTabs.map(t => el('button', {
-      class: 'subtab-btn' + (currentTab === t.id ? ' on' : ''),
-      role: 'tab',
-      'aria-selected': currentTab === t.id,
+      class: 'chip' + (currentTab === t.id ? ' on' : ''),
       onclick: () => { currentTab = t.id; render(); }
     }, t.label))));
 

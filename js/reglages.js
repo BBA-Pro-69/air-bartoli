@@ -141,19 +141,17 @@ function render() {
   const app = root; app.innerHTML = '';
   app.append(el('h1', {}, 'Réglages'));
 
-  // --- barre de sous-onglets thématiques pour éliminer le scroll vertical
+  // --- boutons de sélection thématiques (style Analyse, pas de débordement)
   const themes = [
-    { id: 'categories', label: 'Barème & Catégories' },
+    { id: 'categories', label: 'Catégories & barème' },
     { id: 'boosters',   label: 'Boosters' },
     { id: 'rewards',    label: 'Récompenses' },
-    { id: 'system',     label: 'Options & Effets' }
+    { id: 'system',     label: 'Options & effets' }
   ];
 
-  app.append(el('div', { class: 'subtabs-bar', role: 'tablist', style: 'margin-bottom:14px' },
+  app.append(el('div', { class: 'chips', style: 'margin-bottom:14px' },
     ...themes.map(t => el('button', {
-      class: 'subtab-btn' + (currentTheme === t.id ? ' on' : ''),
-      role: 'tab',
-      'aria-selected': currentTheme === t.id,
+      class: 'chip' + (currentTheme === t.id ? ' on' : ''),
       onclick: () => { currentTheme = t.id; render(); }
     }, t.label))));
 

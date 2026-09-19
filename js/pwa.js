@@ -5,7 +5,7 @@
 //   2. un bandeau de mise à jour dès qu'une nouvelle version est prête ;
 //   3. un bouton d'installation présent dans l'en-tête ET dans le menu.
 // =====================================================================
-export const CACHE_VERSION = '2026-09-19i';
+export const CACHE_VERSION = '2026-09-19j';
 const SNOOZE_KEY = 'ab_install_snooze';
 const SNOOZE_DAYS = 7;
 

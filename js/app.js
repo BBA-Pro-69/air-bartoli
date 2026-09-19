@@ -90,7 +90,7 @@ function go(delta) {
 function enableSwipe(zone) {
   let x0 = null, y0 = null, locked = false;
   const scrollableX = target =>
-    !!target.closest?.('.chips, .no-swipe, input[type="range"], table, .modal');
+    !!target.closest?.('.chips, .chip, .subtabs-bar, .subtab-btn, .no-swipe, input[type="range"], table, .modal, .tile');
 
   zone.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) return;
