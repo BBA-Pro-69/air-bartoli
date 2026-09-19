@@ -25,7 +25,7 @@ export function avatarSrc(name = '') {
   return alias ? PERSON_AVATARS[alias] : '';
 }
 
-const PERSON_AVATAR_PX = { xs: 22, sm: 30, md: 40, lg: 60 };
+const PERSON_AVATAR_PX = { xs: 24, sm: 36, md: 50, lg: 70, xl: 90 };
 
 export function avatar(name, { size = 'md', className = '', title = name } = {}) {
   const src = avatarSrc(name);

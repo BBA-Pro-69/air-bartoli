@@ -49,16 +49,14 @@ function renderGlobalScores() {
   if (!box) return;
   box.innerHTML = '';
   state.children.forEach(c => {
-    const lv = level(c.id);
     box.append(el('button', {
       class: 'kid' + (state.child === c.id ? ' on' : ''),
-      style: `--kid:${c.color}`,
+      style: `--kid:${c.color};display:flex;flex-direction:column;align-items:center;padding:12px;gap:8px`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      el('div', { class: 'kid-name' }, personLabel(c.first_name, { size: 'sm' })),
-      el('div', { class: 'kid-balance', style: `color:${c.color}` }, String(bal(c.id))),
-      el('div', { class: 'kid-level' },
-        (lv.level_label || 'Niveau 1') + ' · ' + (lv.status_points || 0) + ' pts cumulés')));
+      avatar(c.first_name, { size: 'lg', title: c.first_name }),
+      el('div', { class: 'kid-balance', style: `color:${c.color};margin:0;font-size:2.2rem;line-height:1` }, String(bal(c.id))),
+      el('span', { class: 'muted', style: 'font-size:.82rem;font-weight:600' }, 'points')));
   });
 }
 
@@ -86,9 +84,9 @@ function renderDayScoreHeader() {
       style: `--kid:${c.color};cursor:pointer`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      avatar(c.first_name, { size: 'xs', title: c.first_name }),
-      el('span', { class: 'name' }, c.first_name),
-      el('strong', { class: stats.net >= 0 ? 'pos' : 'neg' }, (stats.net > 0 ? '+' : '') + stats.net + ' pt' + (Math.abs(stats.net) > 1 ? 's' : ''))));
+      avatar(c.first_name, { size: 'sm', title: c.first_name }),
+      el('strong', { class: stats.net >= 0 ? 'pos' : 'neg', style: 'font-size:1.05rem;margin-left:4px' },
+        (stats.net > 0 ? '+' : '') + stats.net + ' pt' + (Math.abs(stats.net) > 1 ? 's' : ''))));
   });
 }
 

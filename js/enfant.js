@@ -35,26 +35,19 @@ function render() {
   const c = kid(current), lv = level(current), b = bal(current);
   const app = root; app.innerHTML = '';
 
-  app.append(el('div', { class: 'chips', style: 'margin-bottom:14px' },
+  app.append(el('div', { class: 'chips', style: 'margin-bottom:14px;justify-content:center;gap:14px' },
     ...children.map(k => el('button', {
       class: 'chip' + (k.id === current ? ' on' : ''),
+      style: 'border-radius:999px;padding:4px 10px;min-height:50px',
       onclick: () => { current = k.id; render(); }
-    }, personLabel(k.first_name, { size: 'sm' })))));
+    }, avatar(k.first_name, { size: 'md', title: k.first_name })))));
 
-  // --- bandeau synthétique : solde, niveau, jauge
-  const next = lv.next_level_points;
-  app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046)` },
-    el('div', { class: 'hero-person' }, personLabel(c.first_name, { size: 'lg' })),
-    el('div', { class: 'badge' }, lv.level_label || 'Niveau 1'),
-    el('div', { class: 'hero-balance', style: 'margin-top:8px' }, String(b)),
-    el('div', { class: 'hero-sub' }, 'points à dépenser'),
-    next
-      ? el('div', {},
-          gauge(lv.status_points, next, '#fff'),
-          el('div', { class: 'hero-sub', style: 'margin-top:6px' },
-            (next - lv.status_points) + ' points cumulés avant le niveau suivant'))
-      : el('div', { class: 'hero-sub', style: 'margin-top:10px' }, 'Niveau maximum atteint.'),
-    lv.perks ? el('div', { class: 'hero-sub', style: 'margin-top:8px' }, '★ ' + lv.perks) : null));
+  // --- bandeau synthétique : grande photo et solde de points uniquement
+  app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046);padding:24px 16px;text-align:center` },
+    el('div', { style: 'display:flex;justify-content:center;margin-bottom:10px' },
+      avatar(c.first_name, { size: 'xl', title: c.first_name })),
+    el('div', { class: 'hero-balance', style: 'font-size:3rem;line-height:1;margin-top:4px' }, String(b)),
+    el('div', { class: 'hero-sub', style: 'font-size:1rem;font-weight:600;opacity:.9' }, 'points à dépenser')));
 
   // --- sous-onglets horizontaux segmentés (Pour toi / Ensemble / Mon rythme)
   const indRewards = rewards.filter(r => r.scope === 'individual' && r.active);
@@ -62,8 +55,7 @@ function render() {
 
   const subTabs = [
     { id: 'individual', label: 'Pour toi (' + indRewards.length + ')' },
-    { id: 'collective', label: 'Ensemble (' + colRewards.length + ')' },
-    { id: 'status',     label: 'Mon rythme' }
+    { id: 'collective', label: 'Ensemble (' + colRewards.length + ')' }
   ];
 
   app.append(el('div', { class: 'chips', style: 'margin-bottom:14px' },
@@ -86,20 +78,6 @@ function render() {
       colRewards.length
         ? el('div', { class: 'rewards' }, ...colRewards.map(r => collectiveCard(r)))
         : el('p', { class: 'muted' }, 'Aucune récompense collective configurée.')));
-  } else if (currentTab === 'status') {
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Ton rythme'),
-      el('p', { style: 'margin:0' },
-        rate(current) > 0
-          ? el('span', {}, 'En ce moment tu gagnes ', el('strong', {}, rate(current) + ' points'), ' par semaine.')
-          : el('span', { class: 'muted' }, 'Pas encore assez de points pour calculer ton rythme.')),
-      lv.next_level_points
-        ? el('div', { style: 'margin-top:14px' },
-            el('h3', {}, 'Statut ' + (lv.level_label || 'Niveau 1')),
-            gauge(lv.status_points, lv.next_level_points, 'var(--cyan)'),
-            el('p', { class: 'muted', style: 'margin-top:6px' },
-              lv.status_points + ' / ' + lv.next_level_points + ' points cumulés'))
-        : null));
   }
 }
 
@@ -132,8 +110,8 @@ function collectiveCard(r) {
     el('div', { class: 'eta' }, 'Cagnotte : ', el('strong', {}, total + ' / ' + r.cost),
       ' · minimum ' + r.min_per_child + ' par personne'),
     el('div', { class: 'eta' },
-      ...children.map(c => el('div', {},
-        personLabel(c.first_name, { size: 'xs' }), ' : ' + bal(c.id) +
+      ...children.map(c => el('div', { style: 'display:flex;align-items:center;gap:6px' },
+        avatar(c.first_name, { size: 'xs', title: c.first_name }), ' : ' + bal(c.id) +
         (bal(c.id) >= r.min_per_child ? ' ✓' : ' (il manque ' + (r.min_per_child - bal(c.id)) + ')')))),
     ok ? el('button', {
       class: 'btn btn-primary btn-block reward-action-btn',

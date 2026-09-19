@@ -6,7 +6,7 @@ import * as api from './api.js';
 import { el, pts, fail, divergingBars, lineChart, personLabel } from './ui.js';
 
 let root = null;
-let children = [], profile = [], daily = [], levels = [], rates = [];
+let children = [], profile = [], daily = [], levels = [], rates = [], balances = [];
 let period = 'month'; // 'week' | 'month' | '3months' | 'year' | 'all'
 let enfant = null;    // null = tous
 let graphView = 'categories'; // 'categories' | 'dayparts'
@@ -65,8 +65,9 @@ function render() {
       el('button', { class: 'chip' + (enfant ? '' : ' on'), onclick: () => { enfant = null; render(); } }, 'Les deux'),
       ...children.map(c => el('button', {
         class: 'chip' + (enfant === c.id ? ' on' : ''),
+        style: 'border-radius:999px;padding:4px 8px',
         onclick: () => { enfant = c.id; render(); }
-      }, personLabel(c.first_name, { size: 'sm' })))));
+      }, avatar(c.first_name, { size: 'sm', title: c.first_name })))));
 
   const p = profile.filter(r => !enfant || r.child_id === enfant);
 
@@ -77,12 +78,12 @@ function render() {
       ...children.filter(c => !enfant || c.id === enfant).map(c => {
         const lv = levels.find(l => l.child_id === c.id) || {};
         const rt = (rates.find(r => r.child_id === c.id) || {}).weekly_rate || 0;
-        return el('div', { style: `border-left:4px solid ${c.color};padding-left:12px` },
-          el('div', { style: 'font-weight:700' }, personLabel(c.first_name, { size: 'sm' })),
-          el('div', { class: 'muted' },
-            (lv.level_label || 'Niveau 1') + ' · ' + (lv.status_points || 0) + ' pts cumulés'),
-          el('div', { class: 'muted' }, 'Rythme : ' + rt + ' pts/semaine' +
-            (rt ? (rt > 26 ? ' (au-dessus de l\'étalon de 22)' : rt < 18 ? ' (en dessous de l\'étalon de 22)' : ' (dans l\'étalon)') : '')));
+        return el('div', { style: `display:flex;align-items:center;gap:14px;border-left:4px solid ${c.color};padding-left:14px` },
+          avatar(c.first_name, { size: 'md', title: c.first_name }),
+          el('div', {},
+            el('div', { class: 'muted', style: 'font-size:.85rem;font-weight:600' }, 'Rythme : ' + rt + ' pts/semaine'),
+            el('div', { style: 'font-size:1.6rem;font-weight:800;color:var(--ink);line-height:1.1;margin-top:2px' },
+              (balances.find(b => b.child_id === c.id)?.balance ?? 0) + ' pts')));
       }))));
 
   // --- 2. Répartition : Graphique à bascule (Grandes catégories ou Moments de la journée)
@@ -175,7 +176,7 @@ function render() {
       el('tbody', {}, ...(filteredDetail.length ? filteredDetail.slice(0, 60).map(r => {
         const c = children.find(k => k.id === r.child_id);
         return el('tr', {},
-          el('td', { 'data-th': 'Enfant' }, personLabel(c?.first_name || '—', { size: 'xs' })),
+          el('td', { 'data-th': 'Enfant', style: 'text-align:center' }, avatar(c?.first_name || '—', { size: 'sm', title: c?.first_name || '' })),
           el('td', { 'data-th': 'Catégorie' }, r.category_label),
           el('td', { 'data-th': 'Moment' }, api.dayPartLabel(r.day_part) || '—'),
           el('td', { 'data-th': 'Fois' }, String(r.occurrences)),
@@ -196,7 +197,7 @@ export async function mount(container) {
   root = container;
   root.innerHTML = '<p class="muted">Chargement…</p>';
   try {
-    [children, levels, rates] = await Promise.all([api.getChildren(), api.getLevels(), api.getRates()]);
+    [children, levels, rates, balances] = await Promise.all([api.getChildren(), api.getLevels(), api.getRates(), api.getBalances()]);
     await reload();
   } catch (e) { fail(e); }
 }
@@ -204,7 +205,7 @@ export async function mount(container) {
 export async function refreshView() {
   if (!root) return;
   try {
-    [children, levels, rates] = await Promise.all([api.getChildren(), api.getLevels(), api.getRates()]);
+    [children, levels, rates, balances] = await Promise.all([api.getChildren(), api.getLevels(), api.getRates(), api.getBalances()]);
     await reload();
   } catch (e) { fail(e); }
 }
