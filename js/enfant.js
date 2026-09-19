@@ -4,7 +4,7 @@
 //  Bouton large « Donner cette récompense » pour valider immédiatement.
 // =====================================================================
 import * as api from './api.js';
-import { el, pts, toast, fail, modal, gauge, personLabel } from './ui.js';
+import { el, pts, toast, fail, modal, gauge, personLabel, undoBar } from './ui.js';
 import { celebrateMilestone } from './cinematics.js';
 
 let root = null;
@@ -213,15 +213,10 @@ async function giveDirect(r, shares) {
         // Bandeau d'annulation 10 secondes
         undoBar('Récompense « ' + r.label + ' » (-' + sharePts + ' pts)', async () => {
           try {
-            // Retrouver l'événement créé
-            const evs = await api.getEvents(20);
-            const ev = evs.find(e => e.redemption_id === red.id && e.kind === 'reward');
-            if (ev) {
-              await api.reverseEvent(ev.id, 'Annulé dans les 10 secondes');
-              await load();
-              render();
-              toast('Attribution annulée, points restitués.');
-            }
+            await api.cancelRedemption(red.id, 'Annulé dans les 10 secondes');
+            await load();
+            render();
+            toast('Attribution annulée, points restitués.');
           } catch (err) { fail(err); }
         }, 10);
       } catch (e) { fail(e); }

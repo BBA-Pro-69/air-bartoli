@@ -144,6 +144,7 @@ export const addEvent = (child_id, category_id, points, date, day_part, note, fo
                      p_day_part: day_part ?? null, p_note: note || null,
                      p_force_kind: force_kind, p_repairable: repairable });
 export const reverseEvent = (id, reason) => rpc('reverse_event', { p_event_id: id, p_reason: reason || null });
+export const cancelRedemption = (id, reason) => rpc('cancel_redemption', { p_redemption_id: id, p_reason: reason || null });
 export const repairEvent  = (id, note)   => rpc('repair_event',  { p_event_id: id, p_ratio: 0.5, p_note: note || null });
 export const requestRedemption = (reward_id, shares) =>
   rpc('request_redemption', { p_reward_id: reward_id, p_shares: shares });

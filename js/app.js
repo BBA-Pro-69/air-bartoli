@@ -141,8 +141,7 @@ function closeMenu() {
 
 function initMenuSheetDrag() {
   const menu = byId('appmenu');
-  const sheet = menu.querySelector('.am-sheet');
-  const grip = menu.querySelector('.am-grip');
+  const sheet = menu?.querySelector('.am-sheet');
   if (!menu || !sheet) return;
 
   let y0 = null;
@@ -159,6 +158,8 @@ function initMenuSheetDrag() {
     if (y0 === null) return;
     const dy = e.touches[0].clientY - y0;
     if (dy > 0) {
+      // Annuler le rafraîchissement natif du navigateur (pull-to-refresh)
+      if (e.cancelable) e.preventDefault();
       currentY = dy;
       sheet.style.transform = `translateY(${dy}px)`;
     }
@@ -167,36 +168,38 @@ function initMenuSheetDrag() {
   const handleEnd = () => {
     if (y0 === null) return;
     y0 = null;
-    sheet.style.transition = 'transform .2s ease-out';
-    if (currentY > 80) {
+    sheet.style.transition = 'transform .22s cubic-bezier(.16,1,.3,1)';
+    if (currentY > 60) {
       sheet.style.transform = 'translateY(100%)';
-      setTimeout(closeMenu, 180);
+      setTimeout(closeMenu, 200);
     } else {
       sheet.style.transform = 'translateY(0)';
     }
   };
 
-  if (grip) {
-    grip.addEventListener('touchstart', handleStart, { passive: true });
-    grip.addEventListener('touchmove', handleMove, { passive: true });
-    grip.addEventListener('touchend', handleEnd, { passive: true });
-  }
+  // Capter le geste sur la zone de prise (grip) et l'en-tête
+  const dragZones = [menu.querySelector('.am-grip'), menu.querySelector('.am-head')].filter(Boolean);
+  dragZones.forEach(zone => {
+    zone.addEventListener('touchstart', handleStart, { passive: true });
+    zone.addEventListener('touchmove', handleMove, { passive: false });
+    zone.addEventListener('touchend', handleEnd, { passive: true });
+  });
 
-  // Aussi permettre de tirer le bandeau supérieur de la feuille
-  const head = menu.querySelector('.am-head');
-  if (head) {
-    head.addEventListener('touchstart', handleStart, { passive: true });
-    head.addEventListener('touchmove', handleMove, { passive: true });
-    head.addEventListener('touchend', handleEnd, { passive: true });
-  }
-
-  // Permettre aussi de tirer vers le bas sur la barre de navigation basse pour ouvrir le menu
+  // Geste vers le haut sur la poignée de la barre basse pour ouvrir le menu
   const appnavGrip = byId('appnav')?.querySelector('.grip');
   if (appnavGrip) {
-    appnavGrip.addEventListener('click', () => {
-      openMenu();
-      vibrate(8);
-    });
+    let navY0 = null;
+    appnavGrip.addEventListener('click', () => { openMenu(); vibrate(8); });
+    appnavGrip.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) navY0 = e.touches[0].clientY;
+    }, { passive: true });
+    appnavGrip.addEventListener('touchend', e => {
+      if (navY0 !== null) {
+        const dy = e.changedTouches[0].clientY - navY0;
+        navY0 = null;
+        if (dy < -20) { openMenu(); vibrate(8); }
+      }
+    }, { passive: true });
   }
 }
 

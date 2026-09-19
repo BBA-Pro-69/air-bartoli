@@ -532,7 +532,11 @@ function confirmCancelReward(e) {
     onClick: async close => {
       close();
       try {
-        await api.reverseEvent(e.id, 'Annulation de récompense');
+        if (e.redemption_id) {
+          await api.cancelRedemption(e.redemption_id, 'Annulation de récompense');
+        } else {
+          await api.reverseEvent(e.id, 'Annulation de récompense');
+        }
         toast('Récompense annulée (+ ' + refundPts + ' pts restitués).');
         await loadPeriod();
       } catch (err) { fail(err); }
