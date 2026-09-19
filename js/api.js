@@ -148,6 +148,7 @@ export const repairEvent  = (id, note)   => rpc('repair_event',  { p_event_id: i
 export const requestRedemption = (reward_id, shares) =>
   rpc('request_redemption', { p_reward_id: reward_id, p_shares: shares });
 export const approveRedemption = (id) => rpc('approve_redemption', { p_redemption_id: id });
+export const claimReward = (reward_id, shares) => rpc('claim_reward', { p_reward_id: reward_id, p_shares: shares });
 export const applyPeriodBoosters = () => rpc('apply_period_boosters', {});
 export const deleteCategory = (category_id) => rpc('delete_category', { p_category_id: category_id });
 

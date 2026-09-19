@@ -1,10 +1,11 @@
 // =====================================================================
-//  Ecran enfant. C'est la page qu'on montre a Keyran et a Riles.
-//  Regles : le solde en tres gros, un compte a rebours sous chaque
-//  recompense, et AUCUNE comparaison entre les deux freres.
+//  Ecran Récompenses (🎁).
+//  Solde en grand, points à dépenser, sous-onglets compacts.
+//  Bouton large « Donner cette récompense » pour valider immédiatement.
 // =====================================================================
 import * as api from './api.js';
 import { el, pts, toast, fail, modal, gauge, personLabel } from './ui.js';
+import { celebrateMilestone } from './cinematics.js';
 
 let root = null;
 let children = [], levels = [], balances = [], rewards = [], elig = [], rates = [], current = null, currentTab = 'individual';
@@ -44,14 +45,14 @@ function render() {
   const next = lv.next_level_points;
   app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046)` },
     el('div', { class: 'hero-person' }, personLabel(c.first_name, { size: 'lg' })),
-    el('div', { class: 'badge' }, lv.level_label || 'Décollage'),
+    el('div', { class: 'badge' }, lv.level_label || 'Niveau 1'),
     el('div', { class: 'hero-balance', style: 'margin-top:8px' }, String(b)),
     el('div', { class: 'hero-sub' }, 'points à dépenser'),
     next
       ? el('div', {},
           gauge(lv.status_points, next, '#fff'),
           el('div', { class: 'hero-sub', style: 'margin-top:6px' },
-            (next - lv.status_points) + ' miles avant le niveau suivant'))
+            (next - lv.status_points) + ' points cumulés avant le niveau suivant'))
       : el('div', { class: 'hero-sub', style: 'margin-top:10px' }, 'Niveau maximum atteint.'),
     lv.perks ? el('div', { class: 'hero-sub', style: 'margin-top:8px' }, '★ ' + lv.perks) : null));
 
@@ -94,10 +95,10 @@ function render() {
           : el('span', { class: 'muted' }, 'Pas encore assez de points pour calculer ton rythme.')),
       lv.next_level_points
         ? el('div', { style: 'margin-top:14px' },
-            el('h3', {}, 'Statut ' + (lv.level_label || 'Décollage')),
+            el('h3', {}, 'Statut ' + (lv.level_label || 'Niveau 1')),
             gauge(lv.status_points, lv.next_level_points, 'var(--cyan)'),
             el('p', { class: 'muted', style: 'margin-top:6px' },
-              lv.status_points + ' / ' + lv.next_level_points + ' miles'))
+              lv.status_points + ' / ' + lv.next_level_points + ' points cumulés'))
         : null));
   }
 }
@@ -111,12 +112,13 @@ function rewardCard(r) {
       el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),
     el('div', { style: 'margin:10px 0 6px' }, gauge(b, r.cost, kid(current).color)),
     el('div', { class: 'eta' }, ready
-      ? el('strong', {}, 'Tu peux le prendre !')
-      : el('span', {}, 'Il te manque ', el('strong', {}, (r.cost - b) + ' points'), ', ', etaText(e.days_left))),
+      ? el('strong', {}, 'Objectif atteint ! Prêt à être attribué.')
+      : el('span', {}, 'Il manque ', el('strong', {}, (r.cost - b) + ' points'), ', ', etaText(e.days_left))),
     ready ? el('button', {
-      class: 'btn btn-primary btn-sm', style: 'margin-top:10px',
-      onclick: () => ask(r, [{ child_id: current, points: r.cost }])
-    }, 'Demander') : null);
+      class: 'btn btn-primary btn-block reward-action-btn',
+      style: 'margin-top:12px;width:100%',
+      onclick: () => giveDirect(r, [{ child_id: current, points: r.cost }])
+    }, '🎁 Donner cette récompense') : null);
 }
 
 function collectiveCard(r) {
@@ -134,13 +136,13 @@ function collectiveCard(r) {
         personLabel(c.first_name, { size: 'xs' }), ' : ' + bal(c.id) +
         (bal(c.id) >= r.min_per_child ? ' ✓' : ' (il manque ' + (r.min_per_child - bal(c.id)) + ')')))),
     ok ? el('button', {
-      class: 'btn btn-primary btn-sm', style: 'margin-top:10px',
+      class: 'btn btn-primary btn-block reward-action-btn',
+      style: 'margin-top:12px;width:100%',
       onclick: () => splitModal(r)
-    }, 'Demander') : null);
+    }, '🎁 Donner cette sortie collective') : null);
 }
 
-// Repartition d'une sortie collective : proportionnelle aux soldes, mais
-// jamais en dessous du minimum par enfant. Le parent peut ajuster.
+// Repartition collective et attribution directe
 function splitModal(r) {
   const total = children.reduce((s, c) => s + bal(c.id), 0);
   let parts = children.map(c => Math.max(r.min_per_child, Math.round(r.cost * bal(c.id) / total)));
@@ -165,15 +167,21 @@ function splitModal(r) {
       ...children.map((c, i) => el('div', { class: 'field' }, el('label', {}, personLabel(c.first_name, { size: 'xs' })), inputs[i]))),
     tot);
   modal(r.label, body, [{
-    label: 'Envoyer la demande', class: 'btn-primary',
-    onClick: close => { close(); ask(r, children.map((c, i) => ({ child_id: c.id, points: parts[i] }))); }
+    label: '🎁 Confirmer et donner', class: 'btn-primary',
+    onClick: async close => {
+      close();
+      await giveDirect(r, children.map((c, i) => ({ child_id: c.id, points: parts[i] })));
+    }
   }]);
 }
 
-async function ask(r, shares) {
+async function giveDirect(r, shares) {
   try {
-    await api.requestRedemption(r.id, shares);
-    toast('Demande envoyée. Un parent doit la valider.', 'ok', 5000);
+    await api.claimReward(r.id, shares);
+    celebrateMilestone('🎁 ' + r.label);
+    toast('Récompense attribuée ! Points débités avec succès.', 'ok', 5000);
+    await load();
+    render();
   } catch (e) { fail(e); }
 }
 

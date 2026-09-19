@@ -80,7 +80,7 @@ function render() {
         return el('div', { style: `border-left:4px solid ${c.color};padding-left:12px` },
           el('div', { style: 'font-weight:700' }, personLabel(c.first_name, { size: 'sm' })),
           el('div', { class: 'muted' },
-            (lv.level_label || 'Décollage') + ' · ' + (lv.status_points || 0) + ' miles de statut'),
+            (lv.level_label || 'Niveau 1') + ' · ' + (lv.status_points || 0) + ' pts cumulés'),
           el('div', { class: 'muted' }, 'Rythme : ' + rt + ' pts/semaine' +
             (rt ? (rt > 26 ? ' (au-dessus de l\'étalon de 22)' : rt < 18 ? ' (en dessous de l\'étalon de 22)' : ' (dans l\'étalon)') : '')));
       }))));

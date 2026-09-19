@@ -15,11 +15,11 @@ import * as dashboard from './dashboard.js';
 import * as reglages from './reglages.js';
 
 const VIEWS = [
-  { id: 'saisie',     title: 'Saisie',      short: 'Saisie',      icon: '＋', mod: saisie },
-  { id: 'enfant',     title: 'Récompenses', short: 'Récompenses', icon: '🎁', mod: enfant },
-  { id: 'historique', title: 'Journal',     short: 'Journal',     icon: '≡',  mod: historique },
-  { id: 'dashboard',  title: 'Analyse',     short: 'Analyse',     icon: '◔',  mod: dashboard },
-  { id: 'reglages',   title: 'Réglages',    short: 'Réglages',    icon: '⚙',  mod: reglages }
+  { id: 'saisie',     title: 'Saisie',      short: 'Saisie',   icon: '＋', mod: saisie },
+  { id: 'enfant',     title: 'Récompenses', short: '🎁',        icon: '',   mod: enfant },
+  { id: 'historique', title: 'Journal',     short: 'Journal',  icon: '≡',  mod: historique },
+  { id: 'dashboard',  title: 'Analyse',     short: 'Analyse',  icon: '◔',  mod: dashboard },
+  { id: 'reglages',   title: 'Réglages',    short: 'Réglages', icon: '⚙',  mod: reglages }
 ];
 const TABS = ['saisie', 'enfant', 'historique', 'dashboard'];
 

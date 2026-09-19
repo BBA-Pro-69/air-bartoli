@@ -131,7 +131,7 @@ function render() {
       el('span', { class: 'journal-badge' }, view === 'calendar' ? 'Vue Calendrier' : 'Vue Boosters')),
     renderViewSwitch(),
     renderChildFilter(),
-    view === 'calendar' ? renderCalendar() : renderBoostersView()
+    view === 'calendar' ? renderCalendar() : (view === 'boosters' ? renderBoostersView() : renderRewardsView())
   );
 }
 
@@ -148,7 +148,13 @@ function renderViewSwitch() {
       role: 'tab',
       'aria-selected': view === 'boosters',
       onclick: () => { view = 'boosters'; loadPeriod(); }
-    }, 'Boosters'));
+    }, 'Boosters'),
+    el('button', {
+      class: 'journal-switch-btn' + (view === 'rewards' ? ' on' : ''),
+      role: 'tab',
+      'aria-selected': view === 'rewards',
+      onclick: () => { view = 'rewards'; loadPeriod(); }
+    }, 'Récompenses'));
 }
 
 function renderChildFilter() {
@@ -426,6 +432,9 @@ async function loadPeriod() {
     if (view === 'calendar') {
       from = monthStart(cursor);
       to = monthEnd(cursor);
+    } else if (view === 'rewards') {
+      from = '2020-01-01';
+      to = api.todayISO();
     } else {
       // Vue Boosters
       if (boosterPeriod === 'week') {
@@ -460,4 +469,41 @@ export async function mount(container) {
 export async function refreshView() {
   if (!root) return;
   await loadPeriod();
+}
+
+// ---------------------------------------------------------------------
+// 3. Vue Récompenses (Historique des points dépensés et cadeaux obtenus)
+// ---------------------------------------------------------------------
+function renderRewardsView() {
+  const flags = eventFlags(events);
+  const rewardEvents = events.filter(e =>
+    e.kind === 'reward' &&
+    !flags.reversed.has(e.id) &&
+    (!filter || e.child_id === filter));
+
+  const totalSpent = rewardEvents.reduce((sum, e) => sum + Math.abs(Number(e.points || 0)), 0);
+
+  return el('div', { class: 'journal-rewards-view' },
+    el('div', { class: 'card', style: 'margin-bottom:14px;background:#fefce8;border-color:#fef08a' },
+      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+        el('div', {},
+          el('h2', { style: 'margin:0;color:var(--navy)' }, 'Points dépensés en récompenses'),
+          el('p', { class: 'muted', style: 'margin:2px 0 0' }, rewardEvents.length + ' récompense' + (rewardEvents.length > 1 ? 's' : '') + ' prise' + (rewardEvents.length > 1 ? 's' : ''))),
+        el('div', { class: 'journal-booster-total', style: 'background:#fef08a;color:#854d0e' },
+          el('strong', {}, '-' + totalSpent),
+          el('span', {}, 'points')))),
+
+    el('div', { class: 'card' },
+      el('h2', {}, 'Historique des récompenses distribuées'),
+      rewardEvents.length ? el('div', { class: 'journal-events', style: 'margin-top:12px' },
+        ...rewardEvents.map(e => {
+          const c = child(e.child_id);
+          return el('div', { class: 'entry' },
+            el('span', { class: 'entry-dot', style: `background:${c?.color || 'var(--line)'}` }),
+            el('div', { class: 'entry-main' },
+              el('div', { class: 'entry-cat' }, '🎁 ' + (e.note ? e.note.replace(/^Echange : /, '') : 'Récompense')),
+              el('div', { class: 'entry-meta' }, personLabel(c?.first_name || 'Enfant', { size: 'xs' }), ' · ' + api.formatDate(e.event_date))),
+            el('strong', { class: 'entry-pts neg' }, pts(e.points)));
+        }))
+        : el('p', { class: 'muted' }, 'Aucune récompense prise sur cette période.')));
 }

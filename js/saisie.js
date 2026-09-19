@@ -58,7 +58,7 @@ function renderGlobalScores() {
       el('div', { class: 'kid-name' }, personLabel(c.first_name, { size: 'sm' })),
       el('div', { class: 'kid-balance', style: `color:${c.color}` }, String(bal(c.id))),
       el('div', { class: 'kid-level' },
-        (lv.level_label || 'Décollage') + ' · ' + (lv.status_points || 0) + ' miles')));
+        (lv.level_label || 'Niveau 1') + ' · ' + (lv.status_points || 0) + ' pts cumulés')));
   });
 }
 
