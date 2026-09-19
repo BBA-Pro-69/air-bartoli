@@ -16,7 +16,7 @@ import * as reglages from './reglages.js';
 
 const VIEWS = [
   { id: 'saisie',     title: 'Saisie',      short: 'Saisie',   icon: '＋', mod: saisie },
-  { id: 'enfant',     title: 'Récompenses', short: '🎁',        icon: '',   mod: enfant },
+  { id: 'enfant',     title: 'Récompenses', short: 'Récomp.',  icon: '★',  mod: enfant },
   { id: 'historique', title: 'Journal',     short: 'Journal',  icon: '≡',  mod: historique },
   { id: 'dashboard',  title: 'Analyse',     short: 'Analyse',  icon: '◔',  mod: dashboard },
   { id: 'reglages',   title: 'Réglages',    short: 'Réglages', icon: '⚙',  mod: reglages }
@@ -119,17 +119,85 @@ function enableSwipe(zone) {
 }
 
 // ---------------------------------------------------------------------
-// Feuille de menu
+// Feuille de menu (ouverture / fermeture & glissement vers le bas)
 // ---------------------------------------------------------------------
 function openMenu() {
-  byId('appmenu').classList.add('show');
+  const menu = byId('appmenu');
+  const sheet = menu.querySelector('.am-sheet');
+  if (sheet) sheet.style.transform = '';
+  menu.classList.add('show');
   document.body.classList.add('menu-open');
   document.querySelector('[data-tab-btn="menu"]')?.classList.add('opened');
 }
+
 function closeMenu() {
-  byId('appmenu').classList.remove('show');
+  const menu = byId('appmenu');
+  const sheet = menu.querySelector('.am-sheet');
+  if (sheet) sheet.style.transform = '';
+  menu.classList.remove('show');
   document.body.classList.remove('menu-open');
   document.querySelector('[data-tab-btn="menu"]')?.classList.remove('opened');
+}
+
+function initMenuSheetDrag() {
+  const menu = byId('appmenu');
+  const sheet = menu.querySelector('.am-sheet');
+  const grip = menu.querySelector('.am-grip');
+  if (!menu || !sheet) return;
+
+  let y0 = null;
+  let currentY = 0;
+
+  const handleStart = e => {
+    if (e.touches.length !== 1) return;
+    y0 = e.touches[0].clientY;
+    currentY = 0;
+    sheet.style.transition = 'none';
+  };
+
+  const handleMove = e => {
+    if (y0 === null) return;
+    const dy = e.touches[0].clientY - y0;
+    if (dy > 0) {
+      currentY = dy;
+      sheet.style.transform = `translateY(${dy}px)`;
+    }
+  };
+
+  const handleEnd = () => {
+    if (y0 === null) return;
+    y0 = null;
+    sheet.style.transition = 'transform .2s ease-out';
+    if (currentY > 80) {
+      sheet.style.transform = 'translateY(100%)';
+      setTimeout(closeMenu, 180);
+    } else {
+      sheet.style.transform = 'translateY(0)';
+    }
+  };
+
+  if (grip) {
+    grip.addEventListener('touchstart', handleStart, { passive: true });
+    grip.addEventListener('touchmove', handleMove, { passive: true });
+    grip.addEventListener('touchend', handleEnd, { passive: true });
+  }
+
+  // Aussi permettre de tirer le bandeau supérieur de la feuille
+  const head = menu.querySelector('.am-head');
+  if (head) {
+    head.addEventListener('touchstart', handleStart, { passive: true });
+    head.addEventListener('touchmove', handleMove, { passive: true });
+    head.addEventListener('touchend', handleEnd, { passive: true });
+  }
+
+  // Permettre aussi de tirer vers le bas sur la barre de navigation basse pour ouvrir le menu
+  const appnavGrip = byId('appnav')?.querySelector('.grip');
+  if (appnavGrip) {
+    appnavGrip.addEventListener('click', () => {
+      openMenu();
+      vibrate(8);
+    });
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -139,6 +207,7 @@ function closeMenu() {
   try {
   initPWA();
   initTouchFeedback();
+  initMenuSheetDrag();
   me = await requireSession();
   if (!me) return;
 

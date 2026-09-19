@@ -31,7 +31,7 @@ function formCategorie(cat, parentId) {
         ['malus', 'Malus, on en perd'],
         ['both',  'Les deux (catégorie chapeau)']]
       .map(([v, t]) => el('option', { value: v, selected: (cat?.kind || (isSub ? 'bonus' : 'both')) === v }, t)));
-  const points = el('input', { type: 'number', min: '1', max: '50', value: String(cat?.default_points ?? 2) });
+  const points = el('input', { type: 'number', min: '0', max: '50', value: String(cat?.default_points ?? 2) });
   const maxDay = el('input', { type: 'number', min: '1', max: '10', value: cat?.max_per_day ?? '', placeholder: 'illimité' });
   const rep    = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: cat?.repairable || false });
 

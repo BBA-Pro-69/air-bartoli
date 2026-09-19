@@ -503,7 +503,39 @@ function renderRewardsView() {
             el('div', { class: 'entry-main' },
               el('div', { class: 'entry-cat' }, '🎁 ' + (e.note ? e.note.replace(/^Echange : /, '') : 'Récompense')),
               el('div', { class: 'entry-meta' }, personLabel(c?.first_name || 'Enfant', { size: 'xs' }), ' · ' + api.formatDate(e.event_date))),
-            el('strong', { class: 'entry-pts neg' }, pts(e.points)));
+            el('strong', { class: 'entry-pts neg' }, pts(e.points)),
+            el('button', {
+              class: 'btn btn-sm btn-danger',
+              style: 'margin-left:8px',
+              onclick: () => confirmCancelReward(e)
+            }, 'Annuler'));
         }))
         : el('p', { class: 'muted' }, 'Aucune récompense prise sur cette période.')));
+}
+
+function confirmCancelReward(e) {
+  const c = child(e.child_id);
+  const rewardName = e.note ? e.note.replace(/^Echange : /, '') : 'Récompense';
+  const refundPts = Math.abs(Number(e.points || 0));
+
+  const body = el('div', {},
+    el('p', { style: 'font-size:1rem;line-height:1.5' },
+      'Veux-tu annuler cette récompense et restituer ',
+      el('strong', {}, '+' + refundPts + ' points'), ' à ',
+      el('strong', {}, c?.first_name || 'l\'enfant'), ' ?'),
+    el('p', { class: 'muted', style: 'margin-top:8px' },
+      'Une écriture inverse de restitution sera ajoutée au journal.'));
+
+  modal('Annuler la récompense', body, [{
+    label: 'Confirmer l\'annulation',
+    class: 'btn-danger',
+    onClick: async close => {
+      close();
+      try {
+        await api.reverseEvent(e.id, 'Annulation de récompense');
+        toast('Récompense annulée (+ ' + refundPts + ' pts restitués).');
+        await loadPeriod();
+      } catch (err) { fail(err); }
+    }
+  }]);
 }

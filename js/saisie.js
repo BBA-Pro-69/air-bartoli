@@ -128,13 +128,17 @@ function renderDayTiles() {
 
 function tile(cat, free = false, context = null) {
   const malus = cat.kind === 'malus';
-  const p = malus ? -Math.abs(cat.default_points) : cat.default_points;
+  const ptsVal = cat.default_points ?? 0;
+  const p = malus ? -Math.abs(ptsVal) : ptsVal;
+  const isNeutral = p === 0;
+  const tileClass = isNeutral ? 'tile-neutral' : (malus ? 'tile-malus' : 'tile-bonus');
+  const ptsLabel = free ? 'au choix' : (isNeutral ? '0 pt' : pts(p));
   return el('button', {
-    class: 'tile ' + (malus ? 'tile-malus' : 'tile-bonus'),
+    class: 'tile ' + tileClass,
     onclick: ev => write(cat, free ? null : p, null, context, cat.kind, cat.repairable, ev.currentTarget)
   },
     el('span', { class: 'tile-label' }, cat.label),
-    el('span', { class: 'tile-pts' }, free ? 'au choix' : pts(p)));
+    el('span', { class: 'tile-pts' }, ptsLabel));
 }
 
 // ---------------------------------------------------------------------
@@ -236,9 +240,9 @@ function openDetailedModal(category) {
 
   const pointsInput = el('input', {
     type: 'number',
-    min: '1',
+    min: '0',
     max: '50',
-    value: String(currentSub.default_points || 1)
+    value: String(currentSub.default_points ?? 0)
   });
 
   // Liste des contextes / moments de la journée
@@ -267,8 +271,9 @@ function openDetailedModal(category) {
     label: 'Enregistrer',
     class: 'btn-primary',
     onClick: async close => {
-      const absPoints = Math.abs(Number(pointsInput.value) || currentSub.default_points || 1);
-      const finalPoints = (currentKind === 'malus') ? -absPoints : absPoints;
+      const rawVal = Number(pointsInput.value);
+      const absPoints = Number.isFinite(rawVal) ? Math.abs(rawVal) : (currentSub.default_points ?? 0);
+      const finalPoints = (currentKind === 'malus' && absPoints > 0) ? -absPoints : absPoints;
       const note = noteInput.value.trim() || null;
       const context = contextSelect.value || null;
       close();

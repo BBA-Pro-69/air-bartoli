@@ -176,13 +176,57 @@ function splitModal(r) {
 }
 
 async function giveDirect(r, shares) {
-  try {
-    await api.claimReward(r.id, shares);
-    celebrateMilestone('🎁 ' + r.label);
-    toast('Récompense attribuée ! Points débités avec succès.', 'ok', 5000);
-    await load();
-    render();
-  } catch (e) { fail(e); }
+  // Calcul des impacts
+  const c = kid(current);
+  const curBal = bal(current);
+  const sharePts = shares.find(s => s.child_id === current)?.points || r.cost;
+  const nextBal = Math.max(0, curBal - sharePts);
+
+  const confirmBody = el('div', {},
+    el('p', { style: 'font-size:1.05rem;line-height:1.5' },
+      'Veux-tu vraiment attribuer la récompense ',
+      el('strong', {}, r.label), ' à ', el('strong', {}, c.first_name || 'l\'enfant'), ' ?'),
+    el('div', { class: 'card', style: 'background:#f8fafc;margin-top:14px;border:1px solid var(--line)' },
+      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+        el('span', { class: 'muted' }, 'Solde actuel'),
+        el('strong', { style: 'font-size:1.1rem' }, curBal + ' pts')),
+      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;margin:6px 0' },
+        el('span', { class: 'muted' }, 'Coût de la récompense'),
+        el('strong', { class: 'neg', style: 'font-size:1.1rem' }, '-' + sharePts + ' pts')),
+      el('div', { style: 'border-top:1px solid var(--line);margin:6px 0' }),
+      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+        el('span', { style: 'font-weight:700' }, 'Nouveau solde restant'),
+        el('strong', { class: 'pos', style: 'font-size:1.2rem' }, nextBal + ' pts'))));
+
+  modal('Confirmer l\'attribution', confirmBody, [{
+    label: '🎁 Confirmer et donner',
+    class: 'btn-primary',
+    onClick: async close => {
+      close();
+      try {
+        const red = await api.claimReward(r.id, shares);
+        celebrateMilestone('🎁 ' + r.label);
+        await load();
+        render();
+        toast('Récompense « ' + r.label + ' » attribuée !', 'ok', 6000);
+
+        // Bandeau d'annulation 10 secondes
+        undoBar('Récompense « ' + r.label + ' » (-' + sharePts + ' pts)', async () => {
+          try {
+            // Retrouver l'événement créé
+            const evs = await api.getEvents(20);
+            const ev = evs.find(e => e.redemption_id === red.id && e.kind === 'reward');
+            if (ev) {
+              await api.reverseEvent(ev.id, 'Annulé dans les 10 secondes');
+              await load();
+              render();
+              toast('Attribution annulée, points restitués.');
+            }
+          } catch (err) { fail(err); }
+        }, 10);
+      } catch (e) { fail(e); }
+    }
+  }]);
 }
 
 export async function mount(container) {
