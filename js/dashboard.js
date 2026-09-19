@@ -169,16 +169,21 @@ function render() {
       selectCat),
     el('table', { class: 'responsive' },
       el('thead', {}, el('tr', {},
+        el('th', {}, 'Enfant'),
         el('th', {}, 'Catégorie'), el('th', {}, 'Moment'),
         el('th', {}, 'Fois'), el('th', {}, 'Gagnés'), el('th', {}, 'Perdus'), el('th', {}, 'Net'))),
-      el('tbody', {}, ...(filteredDetail.length ? filteredDetail.slice(0, 50).map(r => el('tr', {},
-        el('td', { 'data-th': 'Catégorie' }, r.category_label),
-        el('td', { 'data-th': 'Moment' }, api.dayPartLabel(r.day_part) || '—'),
-        el('td', { 'data-th': 'Fois' }, String(r.occurrences)),
-        el('td', { 'data-th': 'Gagnés', class: 'pos' }, String(r.gained || 0)),
-        el('td', { 'data-th': 'Perdus', class: 'neg' }, String(r.lost || 0)),
-        el('td', { 'data-th': 'Net' }, String(r.net_points)))) : [
-        el('tr', {}, el('td', { colspan: '6', class: 'muted', style: 'text-align:center;padding:16px' }, 'Aucune donnée pour cette sélection.'))
+      el('tbody', {}, ...(filteredDetail.length ? filteredDetail.slice(0, 60).map(r => {
+        const c = children.find(k => k.id === r.child_id);
+        return el('tr', {},
+          el('td', { 'data-th': 'Enfant' }, personLabel(c?.first_name || '—', { size: 'xs' })),
+          el('td', { 'data-th': 'Catégorie' }, r.category_label),
+          el('td', { 'data-th': 'Moment' }, api.dayPartLabel(r.day_part) || '—'),
+          el('td', { 'data-th': 'Fois' }, String(r.occurrences)),
+          el('td', { 'data-th': 'Gagnés', class: 'pos' }, String(r.gained || 0)),
+          el('td', { 'data-th': 'Perdus', class: 'neg' }, String(r.lost || 0)),
+          el('td', { 'data-th': 'Net' }, String(r.net_points)));
+      }) : [
+        el('tr', {}, el('td', { colspan: '7', class: 'muted', style: 'text-align:center;padding:16px' }, 'Aucune donnée pour cette sélection.'))
       ])))));
 }
 
