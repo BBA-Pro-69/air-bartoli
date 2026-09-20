@@ -122,6 +122,7 @@ function formRecompense(r) {
         openPhotoCropper({
           title: 'Photo de la récompense',
           isCircle: false,
+          aspectRatio: 16 / 10,
           existingSrc: currentImgUrl,
           onSave: async blob => {
             const url = await api.uploadMedia(blob, 'reward');
@@ -385,6 +386,7 @@ function render() {
                 openPhotoCropper({
                   title: 'Cadrer : ' + r.label,
                   isCircle: false,
+                  aspectRatio: 16 / 10,
                   existingSrc: r.image_url,
                   onSave: async blob => {
                     const url = await api.uploadMedia(blob, 'reward_' + r.id);
@@ -403,6 +405,7 @@ function render() {
                 openPhotoCropper({
                   title: 'Photo : ' + r.label,
                   isCircle: false,
+                  aspectRatio: 16 / 10,
                   existingSrc: null,
                   onSave: async blob => {
                     const url = await api.uploadMedia(blob, 'reward_' + r.id);

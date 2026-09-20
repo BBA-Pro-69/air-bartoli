@@ -168,7 +168,7 @@ export function lineChart(series, { width = 640, height = 220 } = {}) {
 // ---------------------------------------------------------------------
 // Recadreur photo circulaire tactile (type LinkedIn / Instagram)
 // ---------------------------------------------------------------------
-export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, existingSrc = null, onSave }) {
+export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, aspectRatio = 1, existingSrc = null, onSave }) {
   const chooseNewFile = () => {
     const input = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
     document.body.append(input);
@@ -181,7 +181,7 @@ export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, e
       const reader = new FileReader();
       reader.onload = e => {
         const img = new Image();
-        img.onload = () => startCropper(img, title, isCircle, onSave, chooseNewFile);
+        img.onload = () => startCropper(img, title, isCircle, aspectRatio, onSave, chooseNewFile, promptWebUrl);
         img.src = e.target.result;
       };
       reader.readAsDataURL(file);
@@ -190,36 +190,93 @@ export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, e
     input.click();
   };
 
-  // Si une photo existe déjà, on l'ouvre directement dans le recadreur
+  const promptWebUrl = () => {
+    const urlInput = el('input', {
+      type: 'url',
+      placeholder: 'https://exemple.com/image.jpg',
+      style: 'margin-top:6px'
+    });
+    const promptBody = el('div', {},
+      el('p', { class: 'muted', style: 'margin:0 0 10px;font-size:.9rem' },
+        'Colle l\'adresse web (URL) d\'une image trouvée sur internet. Elle sera récupérée, cadrée et sauvegardée dans votre application.'),
+      el('div', { class: 'field' }, el('label', {}, 'URL de l\'image'), urlInput));
+
+    modal('Importer depuis une URL', promptBody, [{
+      label: 'Charger et cadrer',
+      class: 'btn-primary',
+      onClick: async closePrompt => {
+        const rawUrl = urlInput.value.trim();
+        if (!rawUrl || !rawUrl.startsWith('http')) {
+          toast('Veuillez saisir une URL valide commençant par http:// ou https://', 'ko');
+          return;
+        }
+        closePrompt();
+        toast('Chargement de l\'image web…');
+
+        try {
+          // Passer par la fonction Edge Supabase proxy-image pour contourner les restrictions CORS
+          const proxyUrl = 'https://dgsvpxeqwdyeudqubayd.supabase.co/functions/v1/proxy-image';
+          const resp = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: rawUrl })
+          });
+
+          if (!resp.ok) {
+            throw new Error('Impossible de récupérer l\'image distante');
+          }
+
+          const blob = await resp.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            startCropper(img, title, isCircle, aspectRatio, onSave, chooseNewFile, promptWebUrl);
+          };
+          img.src = objectUrl;
+        } catch (err) {
+          // Repli direct si le proxy échoue
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => startCropper(img, title, isCircle, aspectRatio, onSave, chooseNewFile, promptWebUrl);
+          img.onerror = () => fail(new Error('Impossible de charger cette image web (accès restreint par le site source).'));
+          img.src = rawUrl;
+        }
+      }
+    }]);
+  };
+
   if (existingSrc) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => startCropper(img, title, isCircle, onSave, chooseNewFile);
-    img.onerror = () => chooseNewFile(); // Si échec de chargement, ouvrir le sélecteur
+    img.onload = () => startCropper(img, title, isCircle, aspectRatio, onSave, chooseNewFile, promptWebUrl);
+    img.onerror = () => chooseNewFile();
     img.src = existingSrc;
   } else {
     chooseNewFile();
   }
 }
 
-function startCropper(img, title, isCircle, onSave, onChooseOther = null) {
+function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther = null, onChooseUrl = null) {
   let scale = 1;
   let minScale = 1;
   let posX = 0, posY = 0;
   let isDragging = false;
   let startX = 0, startY = 0;
 
-  const canvas = el('canvas', { width: '280', height: '280', class: 'cropper-canvas' });
+  // Dimensions de la boîte de cadrage dans le canvas
+  const targetW = 280;
+  const targetH = isCircle ? 280 : Math.round(targetW / aspectRatio);
+  const pad = 10;
+  const cropW = targetW - pad * 2;
+  const cropH = targetH - pad * 2;
+
+  const canvas = el('canvas', { width: String(targetW), height: String(targetH), class: 'cropper-canvas' });
   const ctx = canvas.getContext('2d');
 
-  // Calcul du zoom initial pour couvrir les 280px
-  const targetSize = 280;
-  const aspect = img.width / img.height;
-  if (aspect > 1) {
-    minScale = targetSize / img.height;
-  } else {
-    minScale = targetSize / img.width;
-  }
+  // Zoom initial pour couvrir entièrement la zone de coupe
+  const scaleW = cropW / img.width;
+  const scaleH = cropH / img.height;
+  minScale = Math.max(scaleW, scaleH);
   scale = minScale;
 
   function draw() {
@@ -230,33 +287,33 @@ function startCropper(img, title, isCircle, onSave, onChooseOther = null) {
     const drawW = img.width * scale;
     const drawH = img.height * scale;
 
-    // Contraindre le déplacement pour ne pas laisser de vide dans la zone de coupe
-    const maxPosX = (drawW - targetSize) / 2;
-    const maxPosY = (drawH - targetSize) / 2;
+    // Contraindre le déplacement pour que l'image couvre toujours le cadre
+    const maxPosX = Math.max(0, (drawW - cropW) / 2);
+    const maxPosY = Math.max(0, (drawH - cropH) / 2);
     posX = Math.max(-maxPosX, Math.min(maxPosX, posX));
     posY = Math.max(-maxPosY, Math.min(maxPosY, posY));
 
-    ctx.drawImage(img, targetSize / 2 - drawW / 2 + posX, targetSize / 2 - drawH / 2 + posY, drawW, drawH);
+    ctx.drawImage(img, targetW / 2 - drawW / 2 + posX, targetH / 2 - drawH / 2 + posY, drawW, drawH);
 
-    // 2. Masque sombre semi-transparent avec découpe circulaire au centre
+    // 2. Masque sombre semi-transparent
     ctx.fillStyle = 'rgba(11, 32, 70, 0.65)';
     ctx.beginPath();
-    ctx.rect(0, 0, targetSize, targetSize);
+    ctx.rect(0, 0, targetW, targetH);
     if (isCircle) {
-      ctx.arc(targetSize / 2, targetSize / 2, targetSize / 2 - 10, 0, Math.PI * 2, true);
+      ctx.arc(targetW / 2, targetH / 2, cropW / 2, 0, Math.PI * 2, true);
     } else {
-      ctx.rect(10, 10, targetSize - 20, targetSize - 20);
+      ctx.rect(pad, pad, cropW, cropH);
     }
     ctx.fill();
 
-    // 3. Bordure du cercle guide
+    // 3. Bordure du cadre guide
     ctx.strokeStyle = '#00A7E1';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     if (isCircle) {
-      ctx.arc(targetSize / 2, targetSize / 2, targetSize / 2 - 10, 0, Math.PI * 2);
+      ctx.arc(targetW / 2, targetH / 2, cropW / 2, 0, Math.PI * 2);
     } else {
-      ctx.rect(10, 10, targetSize - 20, targetSize - 20);
+      ctx.rect(pad, pad, cropW, cropH);
     }
     ctx.stroke();
 
@@ -312,7 +369,7 @@ function startCropper(img, title, isCircle, onSave, onChooseOther = null) {
   const actions = [];
   if (onChooseOther) {
     actions.push({
-      label: '📁 Choisir une autre photo',
+      label: '📁 Fichier',
       class: 'btn-ghost',
       onClick: close => {
         close();
@@ -320,24 +377,33 @@ function startCropper(img, title, isCircle, onSave, onChooseOther = null) {
       }
     });
   }
+  if (onChooseUrl) {
+    actions.push({
+      label: '🌐 URL web',
+      class: 'btn-ghost',
+      onClick: close => {
+        close();
+        onChooseUrl();
+      }
+    });
+  }
   actions.push({
     label: 'Valider et enregistrer',
     class: 'btn-primary',
     onClick: async close => {
-      // Générer le blob JPEG 250x250 net
+      // Dimensions finales optimisées
+      const outW = isCircle ? 250 : 360;
+      const outH = isCircle ? 250 : Math.round(outW / aspectRatio);
+
       const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = 250;
-      finalCanvas.height = 250;
+      finalCanvas.width = outW;
+      finalCanvas.height = outH;
       const fCtx = finalCanvas.getContext('2d');
 
-      const cropLeftInCanvas = 10;
-      const cropTopInCanvas = 10;
-
-      // Calcul de la zone de l'image source qui correspond à la zone de découpe
       fCtx.drawImage(
         canvas,
-        cropLeftInCanvas, cropTopInCanvas, targetSize - 20, targetSize - 20,
-        0, 0, 250, 250
+        pad, pad, cropW, cropH,
+        0, 0, outW, outH
       );
 
       finalCanvas.toBlob(async blob => {
