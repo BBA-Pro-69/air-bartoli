@@ -50,14 +50,16 @@ function renderGlobalScores() {
   box.innerHTML = '';
   state.children.forEach(c => {
     box.append(el('button', {
-      class: 'kid' + (state.child === c.id ? ' on' : ''),
-      style: `--kid:${c.color};display:flex;flex-direction:column;align-items:center;padding:14px 10px;gap:6px`,
+      class: 'kid kid-horizontal' + (state.child === c.id ? ' on' : ''),
+      style: `--kid:${c.color}`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name }),
-      el('strong', { style: 'font-size:1.05rem;color:var(--ink);margin-top:2px' }, c.first_name),
-      el('div', { class: 'kid-balance', style: `color:${c.color};margin:2px 0 0;font-size:2.2rem;line-height:1` }, String(bal(c.id))),
-      el('span', { class: 'muted', style: 'font-size:.8rem;font-weight:600' }, 'points')));
+      el('div', { class: 'kid-avatar-wrap' },
+        avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name })),
+      el('div', { class: 'kid-info-wrap' },
+        el('strong', { class: 'kid-name-text' }, c.first_name),
+        el('div', { class: 'kid-balance-text', style: `color:${c.color}` }, String(bal(c.id))),
+        el('span', { class: 'kid-pts-label' }, 'points'))));
   });
 }
 

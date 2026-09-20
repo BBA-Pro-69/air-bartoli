@@ -719,3 +719,64 @@ body.menu-open{overscroll-behavior-y:contain;overflow:hidden}
 
 /* ---- image de recompense au format 16:9 rigoureux ---- */
 .reward-img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin-bottom:12px;border:1px solid var(--line);box-shadow:0 2px 6px rgba(15,23,42,.06);filter:none !important;opacity:1 !important;mix-blend-mode:normal !important;background:#fff}
+
+/* ---- carte enfant horizontale : grande photo a gauche, donnees a droite ---- */
+.kid.kid-horizontal{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:16px !important;
+  padding:14px 18px !important;
+  border-radius:18px !important;
+  min-height:100px !important;
+  text-align:left !important;
+  transition:all .18s ease;
+}
+.kid-avatar-wrap{
+  flex:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.kid-avatar-wrap .person-avatar-xl{
+  width:84px !important;
+  height:84px !important;
+  box-shadow:0 4px 14px rgba(11,32,70,.18) !important;
+}
+.kid-info-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  min-width:0;
+  gap:2px;
+}
+.kid-name-text{
+  font-size:1.25rem !important;
+  font-weight:800 !important;
+  color:var(--navy) !important;
+  letter-spacing:-.01em;
+  line-height:1.2;
+}
+.kid-balance-text{
+  font-size:2.4rem !important;
+  font-weight:900 !important;
+  line-height:1 !important;
+  letter-spacing:-.03em;
+  margin:2px 0 !important;
+}
+.kid-pts-label{
+  font-size:.82rem !important;
+  font-weight:600 !important;
+  color:var(--muted) !important;
+  text-transform:lowercase;
+}
+
+@media(max-width:480px){
+  .kids{grid-template-columns:1fr 1fr !important;gap:8px !important}
+  .kid.kid-horizontal{gap:10px !important;padding:12px 10px !important}
+  .kid-avatar-wrap .person-avatar-xl{width:64px !important;height:64px !important}
+  .kid-name-text{font-size:1.05rem !important}
+  .kid-balance-text{font-size:1.9rem !important}
+}
