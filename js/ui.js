@@ -280,7 +280,7 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
   scale = minScale;
 
   function draw() {
-    ctx.clearRect(0, 0, targetSize, targetSize);
+    ctx.clearRect(0, 0, targetW, targetH);
     ctx.save();
 
     // 1. Dessin de l'image translatée et zoomée
