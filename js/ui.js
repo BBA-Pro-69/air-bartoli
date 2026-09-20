@@ -321,20 +321,11 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
 
     ctx.drawImage(img, targetW / 2 - drawW / 2 + posX, targetH / 2 - drawH / 2 + posY, drawW, drawH);
 
-    // 2. Zone extérieure assombrie très légèrement et neutre (sans teinte bleue)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.beginPath();
-    ctx.rect(0, 0, targetW, targetH);
-    if (isCircle) {
-      ctx.arc(targetW / 2, targetH / 2, cropW / 2, 0, Math.PI * 2, true);
-    } else {
-      ctx.rect(pad, pad, cropW, cropH);
-    }
-    ctx.fill();
-
-    // 3. Bordure nette du cadre guide
+    // Cadre guide blanc net SANS aucun filtre sombre ni teinte
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 4;
     ctx.beginPath();
     if (isCircle) {
       ctx.arc(targetW / 2, targetH / 2, cropW / 2, 0, Math.PI * 2);
@@ -342,6 +333,7 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
       ctx.rect(pad, pad, cropW, cropH);
     }
     ctx.stroke();
+    ctx.shadowColor = 'transparent';
 
     // Coins de repère discrets
     if (!isCircle) {
@@ -441,9 +433,19 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
       finalCanvas.height = outH;
       const fCtx = finalCanvas.getContext('2d');
 
+      // Découpe DIRECTE depuis l'image source originale : AUCUN filtre, AUCUN masque, AUCUNE altération !
+      const srcCropW = cropW / scale;
+      const srcCropH = cropH / scale;
+      const srcCenterX = img.width / 2 - posX / scale;
+      const srcCenterY = img.height / 2 - posY / scale;
+      const srcX = Math.max(0, Math.min(img.width - srcCropW, srcCenterX - srcCropW / 2));
+      const srcY = Math.max(0, Math.min(img.height - srcCropH, srcCenterY - srcCropH / 2));
+
+      fCtx.imageSmoothingEnabled = true;
+      fCtx.imageSmoothingQuality = 'high';
       fCtx.drawImage(
-        canvas,
-        pad, pad, cropW, cropH,
+        img,
+        srcX, srcY, srcCropW, srcCropH,
         0, 0, outW, outH
       );
 
@@ -452,7 +454,7 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
         try {
           await onSave(blob);
         } catch (err) { fail(err); }
-      }, 'image/jpeg', 0.86);
+      }, 'image/jpeg', 0.92);
     }
   });
 
