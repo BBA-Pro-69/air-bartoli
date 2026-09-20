@@ -165,7 +165,7 @@ function renderChildFilter() {
       class: 'journal-filter-btn' + (filter === c.id ? ' on' : ''),
       style: (filter === c.id ? `--filter-color:${c.color};` : '') + 'border-radius:999px;padding:3px 8px',
       onclick: () => { filter = c.id; render(); }
-    }, avatar(c.first_name, { size: 'sm', title: c.first_name }))));
+    }, avatar(c.first_name, { size: 'sm', customSrc: c.avatar, title: c.first_name }))));
 }
 
 // ---------------------------------------------------------------------
@@ -298,7 +298,7 @@ function renderBoostersView() {
           ...group.entries.map(e => {
             const c = child(e.child_id);
             return el('div', { class: 'journal-booster-row' },
-              avatar(c?.first_name || 'Enfant', { size: 'xs', title: c?.first_name || 'Enfant' }),
+              avatar(c?.first_name || 'Enfant', { size: 'xs', customSrc: c?.avatar, title: c?.first_name || 'Enfant' }),
               el('div', { class: 'journal-booster-main' },
                 el('strong', {}, c?.first_name || 'Enfant'),
                 el('span', { class: 'muted' }, boosterLabel(e) + ' · ' + api.formatDate(e.event_date) + (e.note ? ' (' + e.note + ')' : ''))),
@@ -419,7 +419,7 @@ function openDay(day) {
   const body = el('div', {},
     el('div', { class: 'journal-modal-summaries' }, ...rows.map(({ child: c, stats }) =>
       el('div', { class: 'journal-modal-summary', style: `--kid:${c.color}` },
-        avatar(c.first_name, { size: 'sm', title: c.first_name }), el('b', {}, stats.score + ' pts'),
+        avatar(c.first_name, { size: 'sm', customSrc: c.avatar, title: c.first_name }), el('b', {}, stats.score + ' pts'),
         el('span', {}, '+' + stats.gained + ' · −' + stats.lost + (stats.spent ? ' · dépensé ' + stats.spent : ''))))),
     list.length ? el('div', { class: 'journal-events' }, ...list.map(e => entry(e, flags.reversed.has(e.id), flags.repaired.has(e.id))))
       : el('p', { class: 'muted' }, 'Aucune écriture cette journée.'));
@@ -502,7 +502,7 @@ function renderRewardsView() {
             el('span', { class: 'entry-dot', style: `background:${c?.color || 'var(--line)'}` }),
             el('div', { class: 'entry-main' },
               el('div', { class: 'entry-cat' }, '🎁 ' + (e.note ? e.note.replace(/^Echange : /, '') : 'Récompense')),
-              el('div', { class: 'entry-meta' }, avatar(c?.first_name || 'Enfant', { size: 'sm', title: c?.first_name || '' }), ' · ' + api.formatDate(e.event_date))),
+              el('div', { class: 'entry-meta' }, avatar(c?.first_name || 'Enfant', { size: 'sm', customSrc: c?.avatar, title: c?.first_name || '' }), ' · ' + api.formatDate(e.event_date))),
             el('strong', { class: 'entry-pts neg' }, pts(e.points)),
             el('button', {
               class: 'btn btn-sm btn-danger',

@@ -679,3 +679,7 @@ body.menu-open{overscroll-behavior-y:contain;overflow:hidden}
 #appmenu .am-sheet{overscroll-behavior-y:contain;touch-action:pan-y}
 .tile.tile-neutral{border-left:4px solid var(--muted);background:#fff}
 .tile.tile-neutral .tile-pts{color:var(--muted)}
+
+/* ---- recadreur photo circulaire tactile ---- */
+.cropper-canvas{touch-action:none;border-radius:18px;background:#0b2046;cursor:grab;box-shadow:0 4px 14px rgba(11,32,70,.25)}
+.cropper-canvas:active{cursor:grabbing}

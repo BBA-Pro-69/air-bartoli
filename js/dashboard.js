@@ -67,7 +67,7 @@ function render() {
         class: 'chip' + (enfant === c.id ? ' on' : ''),
         style: 'border-radius:999px;padding:4px 8px',
         onclick: () => { enfant = c.id; render(); }
-      }, avatar(c.first_name, { size: 'sm', title: c.first_name })))));
+      }, avatar(c.first_name, { size: 'sm', customSrc: c.avatar, title: c.first_name })))));
 
   const p = profile.filter(r => !enfant || r.child_id === enfant);
 
@@ -79,7 +79,7 @@ function render() {
         const lv = levels.find(l => l.child_id === c.id) || {};
         const rt = (rates.find(r => r.child_id === c.id) || {}).weekly_rate || 0;
         return el('div', { style: `display:flex;align-items:center;gap:14px;border-left:4px solid ${c.color};padding-left:14px` },
-          avatar(c.first_name, { size: 'md', title: c.first_name }),
+          avatar(c.first_name, { size: 'md', customSrc: c.avatar, title: c.first_name }),
           el('div', {},
             el('div', { class: 'muted', style: 'font-size:.85rem;font-weight:600' }, 'Rythme : ' + rt + ' pts/semaine'),
             el('div', { style: 'font-size:1.6rem;font-weight:800;color:var(--ink);line-height:1.1;margin-top:2px' },
@@ -176,7 +176,7 @@ function render() {
       el('tbody', {}, ...(filteredDetail.length ? filteredDetail.slice(0, 60).map(r => {
         const c = children.find(k => k.id === r.child_id);
         return el('tr', {},
-          el('td', { 'data-th': 'Enfant', style: 'text-align:center' }, avatar(c?.first_name || '—', { size: 'sm', title: c?.first_name || '' })),
+          el('td', { 'data-th': 'Enfant', style: 'text-align:center' }, avatar(c?.first_name || '—', { size: 'sm', customSrc: c?.avatar, title: c?.first_name || '' })),
           el('td', { 'data-th': 'Catégorie' }, r.category_label),
           el('td', { 'data-th': 'Moment' }, api.dayPartLabel(r.day_part) || '—'),
           el('td', { 'data-th': 'Fois' }, String(r.occurrences)),

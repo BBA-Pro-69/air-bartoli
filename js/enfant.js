@@ -63,12 +63,12 @@ function render() {
       class: 'chip' + (k.id === current ? ' on' : ''),
       style: 'border-radius:999px;padding:4px 10px;min-height:50px',
       onclick: () => { current = k.id; render(); }
-    }, avatar(k.first_name, { size: 'md', title: k.first_name })))));
+    }, avatar(k.first_name, { size: 'md', customSrc: k.avatar, title: k.first_name })))));
 
   // Bandeau synthétique : photo XL et solde de points
   app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046);padding:24px 16px;text-align:center` },
     el('div', { style: 'display:flex;justify-content:center;margin-bottom:10px' },
-      avatar(c.first_name, { size: 'xl', title: c.first_name })),
+      avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name })),
     el('div', { class: 'hero-balance', style: 'font-size:3rem;line-height:1;margin-top:4px' }, String(b)),
     el('div', { class: 'hero-sub', style: 'font-size:1rem;font-weight:600;opacity:.9' }, 'points à dépenser')));
 
@@ -135,6 +135,10 @@ function rewardCard(r) {
   const e = elig.find(x => x.reward_id === r.id && x.child_id === current) || {};
   const ready = b >= r.cost;
   return el('div', { class: 'reward' + (ready ? ' ready' : '') },
+    r.image_url ? el('img', {
+      src: r.image_url,
+      style: 'width:100%;height:130px;object-fit:cover;border-radius:10px;margin-bottom:10px;border:1px solid var(--line)'
+    }) : null,
     el('div', { class: 'reward-top' },
       el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),
     el('div', { style: 'margin:10px 0 6px' }, gauge(b, r.cost, kid(current).color)),
@@ -153,6 +157,10 @@ function collectiveCard(r) {
   const manquants = children.filter(c => bal(c.id) < r.min_per_child);
   const ok = total >= r.cost && !manquants.length;
   return el('div', { class: 'reward' + (ok ? ' ready' : '') },
+    r.image_url ? el('img', {
+      src: r.image_url,
+      style: 'width:100%;height:130px;object-fit:cover;border-radius:10px;margin-bottom:10px;border:1px solid var(--line)'
+    }) : null,
     el('div', { class: 'reward-top' },
       el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),
     el('div', { style: 'margin:10px 0 6px' }, gauge(total, r.cost, 'var(--cyan)')),

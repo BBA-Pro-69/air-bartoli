@@ -174,3 +174,19 @@ export async function remove(table, id) {
   const { error } = await sb.from(table).delete().eq('id', id);
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------
+// Upload d'image vers Supabase Storage (bucket 'avatars')
+// ---------------------------------------------------------------------
+export async function uploadMedia(fileBlob, folder = 'avatars', fileName = null) {
+  const me = await requireSession();
+  if (!me) throw new Error('Non connecté.');
+  const name = fileName || `${me.family_id}/${folder}_${Date.now()}.jpg`;
+  const { data, error } = await sb.storage.from('avatars').upload(name, fileBlob, {
+    cacheControl: '3600',
+    upsert: true
+  });
+  if (error) throw error;
+  const { data: pub } = sb.storage.from('avatars').getPublicUrl(name);
+  return pub.publicUrl;
+}

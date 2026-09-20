@@ -19,6 +19,9 @@ function personKey(name = '') {
 }
 
 export function avatarSrc(name = '') {
+  if (typeof name === 'string' && (name.startsWith('http://') || name.startsWith('https://') || name.startsWith('data:'))) {
+    return name;
+  }
   const key = personKey(name);
   if (PERSON_AVATARS[key]) return PERSON_AVATARS[key];
   const alias = Object.keys(PERSON_AVATARS).find(x => key.startsWith(x + ' ') || key.includes(x));
@@ -27,8 +30,8 @@ export function avatarSrc(name = '') {
 
 const PERSON_AVATAR_PX = { xs: 24, sm: 36, md: 50, lg: 70, xl: 90 };
 
-export function avatar(name, { size = 'md', className = '', title = name } = {}) {
-  const src = avatarSrc(name);
+export function avatar(name, { size = 'md', className = '', title = name, customSrc = null } = {}) {
+  const src = customSrc || avatarSrc(name);
   const px = PERSON_AVATAR_PX[size] || PERSON_AVATAR_PX.md;
   if (!src) return el('span', { class: `person-avatar person-avatar-${size} ${className}`.trim(), 'aria-hidden': 'true' });
   return el('img', {
@@ -160,4 +163,172 @@ export function lineChart(series, { width = 640, height = 220 } = {}) {
     svg.append(svgEl('circle', { cx: X(s.points.length - 1), cy: Y(last.y), r: 4, fill: s.color }));
   });
   return svg;
+}
+
+// ---------------------------------------------------------------------
+// Recadreur photo circulaire tactile (type LinkedIn / Instagram)
+// ---------------------------------------------------------------------
+export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, onSave }) {
+  const input = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+  document.body.append(input);
+
+  input.onchange = () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => startCropper(img, title, isCircle, onSave);
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  input.click();
+}
+
+function startCropper(img, title, isCircle, onSave) {
+  let scale = 1;
+  let minScale = 1;
+  let posX = 0, posY = 0;
+  let isDragging = false;
+  let startX = 0, startY = 0;
+
+  const canvas = el('canvas', { width: '280', height: '280', class: 'cropper-canvas' });
+  const ctx = canvas.getContext('2d');
+
+  // Calcul du zoom initial pour couvrir les 280px
+  const targetSize = 280;
+  const aspect = img.width / img.height;
+  if (aspect > 1) {
+    minScale = targetSize / img.height;
+  } else {
+    minScale = targetSize / img.width;
+  }
+  scale = minScale;
+
+  function draw() {
+    ctx.clearRect(0, 0, targetSize, targetSize);
+    ctx.save();
+
+    // 1. Dessin de l'image translatée et zoomée
+    const drawW = img.width * scale;
+    const drawH = img.height * scale;
+
+    // Contraindre le déplacement pour ne pas laisser de vide dans la zone de coupe
+    const maxPosX = (drawW - targetSize) / 2;
+    const maxPosY = (drawH - targetSize) / 2;
+    posX = Math.max(-maxPosX, Math.min(maxPosX, posX));
+    posY = Math.max(-maxPosY, Math.min(maxPosY, posY));
+
+    ctx.drawImage(img, targetSize / 2 - drawW / 2 + posX, targetSize / 2 - drawH / 2 + posY, drawW, drawH);
+
+    // 2. Masque sombre semi-transparent avec découpe circulaire au centre
+    ctx.fillStyle = 'rgba(11, 32, 70, 0.65)';
+    ctx.beginPath();
+    ctx.rect(0, 0, targetSize, targetSize);
+    if (isCircle) {
+      ctx.arc(targetSize / 2, targetSize / 2, targetSize / 2 - 10, 0, Math.PI * 2, true);
+    } else {
+      ctx.rect(10, 10, targetSize - 20, targetSize - 20);
+    }
+    ctx.fill();
+
+    // 3. Bordure du cercle guide
+    ctx.strokeStyle = '#00A7E1';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    if (isCircle) {
+      ctx.arc(targetSize / 2, targetSize / 2, targetSize / 2 - 10, 0, Math.PI * 2);
+    } else {
+      ctx.rect(10, 10, targetSize - 20, targetSize - 20);
+    }
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Événements tactiles et souris pour déplacer l'image
+  canvas.addEventListener('pointerdown', e => {
+    isDragging = true;
+    startX = e.clientX - posX;
+    startY = e.clientY - posY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (!isDragging) return;
+    posX = e.clientX - startX;
+    posY = e.clientY - startY;
+    draw();
+  });
+
+  const stopDrag = () => { isDragging = false; };
+  canvas.addEventListener('pointerup', stopDrag);
+  canvas.addEventListener('pointercancel', stopDrag);
+
+  // Curseur de zoom
+  const zoomSlider = el('input', {
+    type: 'range',
+    min: String(minScale),
+    max: String(minScale * 3),
+    step: '0.01',
+    value: String(scale),
+    style: 'width:100%;margin:12px 0 6px'
+  });
+
+  zoomSlider.oninput = e => {
+    scale = Number(e.target.value);
+    draw();
+  };
+
+  const body = el('div', { style: 'display:flex;flex-direction:column;align-items:center' },
+    el('p', { class: 'muted', style: 'margin:0 0 10px;font-size:.85rem;text-align:center' },
+      'Fais glisser pour centrer le visage et ajuste le zoom :'),
+    canvas,
+    el('div', { class: 'row', style: 'width:100%;align-items:center;gap:8px;margin-top:6px' },
+      el('span', { style: 'font-size:.8rem;color:var(--muted)' }, 'Zoom'),
+      zoomSlider),
+    el('p', { class: 'muted', style: 'margin:4px 0 0;font-size:.75rem;text-align:center' },
+      'Optimisation automatique à ~35 Ko (idéal pour mobile).'));
+
+  draw();
+
+  modal(title, body, [{
+    label: 'Valider et enregistrer',
+    class: 'btn-primary',
+    onClick: async close => {
+      // Générer le blob JPEG 250x250 net
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = 250;
+      finalCanvas.height = 250;
+      const fCtx = finalCanvas.getContext('2d');
+
+      const cropRadius = (targetSize / 2) - 10;
+      const cropLeftInCanvas = 10;
+      const cropTopInCanvas = 10;
+
+      const drawW = img.width * scale;
+      const drawH = img.height * scale;
+      const imgXInCanvas = targetSize / 2 - drawW / 2 + posX;
+      const imgYInCanvas = targetSize / 2 - drawH / 2 + posY;
+
+      // Calcul de la zone de l'image source qui correspond à la zone de découpe
+      const ratio = 250 / (targetSize - 20);
+      fCtx.drawImage(
+        canvas,
+        cropLeftInCanvas, cropTopInCanvas, targetSize - 20, targetSize - 20,
+        0, 0, 250, 250
+      );
+
+      finalCanvas.toBlob(async blob => {
+        close();
+        try {
+          await onSave(blob);
+        } catch (err) { fail(err); }
+      }, 'image/jpeg', 0.86);
+    }
+  }]);
 }

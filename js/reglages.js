@@ -4,7 +4,7 @@
 //  Seule regle : changer un bareme n'affecte que l'avenir.
 // =====================================================================
 import * as api from './api.js';
-import { el, toast, fail, modal, personLabel } from './ui.js';
+import { el, toast, fail, modal, personLabel, openPhotoCropper, avatar } from './ui.js';
 
 let root = null;
 let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], famille = null, currentTheme = 'categories';
@@ -112,7 +112,32 @@ function formRecompense(r) {
   scope.addEventListener('change', calibrer);
   calibrer();
 
+  let currentImgUrl = r?.image_url || null;
+  const imgPreview = el('div', { style: 'margin-bottom:12px;display:flex;align-items:center;gap:12px' },
+    currentImgUrl ? el('img', { src: currentImgUrl, style: 'width:60px;height:60px;border-radius:12px;object-fit:cover;border:1px solid var(--line)' }) : null,
+    el('button', {
+      type: 'button',
+      class: 'btn btn-sm',
+      onclick: () => {
+        openPhotoCropper({
+          title: 'Photo de la récompense',
+          isCircle: false,
+          onSave: async blob => {
+            const url = await api.uploadMedia(blob, 'reward');
+            currentImgUrl = url;
+            toast('Photo importée !');
+            // Mettre à jour l'aperçu
+            imgPreview.innerHTML = '';
+            imgPreview.append(
+              el('img', { src: url, style: 'width:60px;height:60px;border-radius:12px;object-fit:cover;border:1px solid var(--line)' }),
+              el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Photo prête'));
+          }
+        });
+      }
+    }, currentImgUrl ? 'Changer la photo' : '📷 Ajouter une photo'));
+
   const body = el('div', {},
+    imgPreview,
     champ('Libellé', label),
     el('div', { class: 'fields' }, champ('Type', scope), champ('Prix en points', cost),
       champ('Minimum par enfant', minPc)),
@@ -126,7 +151,8 @@ function formRecompense(r) {
         const row = {
           family_id: famille, label: label.value.trim(), scope: scope.value,
           cost: Number(cost.value), min_per_child: Number(minPc.value),
-          description: desc.value, active: r?.active ?? true, sort_order: r?.sort_order ?? 99
+          description: desc.value, active: r?.active ?? true, sort_order: r?.sort_order ?? 99,
+          image_url: currentImgUrl
         };
         if (r) row.id = r.id;
         await api.save('rewards', row);
@@ -167,7 +193,27 @@ function render() {
           const g = el('input', { type: 'number', min: '5', max: '60', value: String(c.weekly_goal) });
           const col = el('input', { type: 'color', value: c.color, style: 'padding:2px;height:44px' });
           return el('tr', {},
-            el('td', { 'data-th': 'Prénom' }, personLabel(c.first_name, { size: 'sm' })),
+            el('td', { 'data-th': 'Photo' },
+              el('button', {
+                type: 'button',
+                class: 'btn btn-sm',
+                style: 'display:inline-flex;align-items:center;gap:8px;padding:4px 10px',
+                title: 'Changer la photo de ' + c.first_name,
+                onclick: () => {
+                  openPhotoCropper({
+                    title: 'Photo de ' + c.first_name,
+                    isCircle: true,
+                    onSave: async blob => {
+                      const url = await api.uploadMedia(blob, 'child_' + c.id);
+                      await api.save('children', { id: c.id, avatar: url });
+                      await reload();
+                      toast('Photo de ' + c.first_name + ' mise à jour !');
+                    }
+                  });
+                }
+              },
+                avatar(c.first_name, { size: 'xs', customSrc: c.avatar, title: c.first_name }),
+                el('span', {}, c.first_name))),
             el('td', { 'data-th': 'Naissance' }, b),
             el('td', { 'data-th': 'Objectif' }, g),
             el('td', { 'data-th': 'Couleur' }, col),
