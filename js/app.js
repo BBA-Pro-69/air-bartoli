@@ -225,6 +225,12 @@ function initMenuSheetDrag() {
   // Appliquer le thème enregistré de l'utilisateur
   if (me.theme) document.documentElement.setAttribute('data-theme', me.theme);
 
+  // Appliquer les dimensions de photos personnalisées
+  const savedSaisie = localStorage.getItem('air_avatar_size_saisie');
+  if (savedSaisie) document.documentElement.style.setProperty('--avatar-size-saisie', savedSaisie + 'px');
+  const savedRec = localStorage.getItem('air_avatar_size_recompense');
+  if (savedRec) document.documentElement.style.setProperty('--avatar-size-recompense', savedRec + 'px');
+
   byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs', customSrc: me.avatar_url }), document.createElement('span'));
   byId('userName').lastElementChild.textContent = me.display_name;
   byId('appShell').hidden = false;

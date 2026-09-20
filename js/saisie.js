@@ -50,16 +50,15 @@ function renderGlobalScores() {
   box.innerHTML = '';
   state.children.forEach(c => {
     box.append(el('button', {
-      class: 'kid kid-horizontal' + (state.child === c.id ? ' on' : ''),
+      class: 'kid kid-centered' + (state.child === c.id ? ' on' : ''),
       style: `--kid:${c.color}`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
-      el('div', { class: 'kid-avatar-wrap' },
+      el('div', { class: 'kid-custom-avatar' },
         avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name })),
-      el('div', { class: 'kid-info-wrap' },
-        el('strong', { class: 'kid-name-text' }, c.first_name),
-        el('div', { class: 'kid-balance-text', style: `color:${c.color}` }, String(bal(c.id))),
-        el('span', { class: 'kid-pts-label' }, 'points'))));
+      el('strong', { style: 'font-size:1.15rem;font-weight:800;color:var(--navy);margin-top:2px' }, c.first_name),
+      el('div', { class: 'kid-balance', style: `color:${c.color};margin:2px 0 0;font-size:2.4rem;line-height:1;font-weight:900` }, String(bal(c.id))),
+      el('span', { class: 'muted', style: 'font-size:.82rem;font-weight:600' }, 'points')));
   });
 }
 

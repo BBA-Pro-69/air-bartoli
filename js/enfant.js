@@ -67,7 +67,7 @@ function render() {
 
   // Bandeau synthétique : photo XL et solde de points
   app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046);padding:24px 16px;text-align:center` },
-    el('div', { style: 'display:flex;justify-content:center;margin-bottom:10px' },
+    el('div', { class: 'recompense-custom-avatar', style: 'display:flex;justify-content:center;margin-bottom:10px' },
       avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name })),
     el('div', { class: 'hero-balance', style: 'font-size:3rem;line-height:1;margin-top:4px' }, String(b)),
     el('div', { class: 'hero-sub', style: 'font-size:1rem;font-weight:600;opacity:.9' }, 'points à dépenser')));

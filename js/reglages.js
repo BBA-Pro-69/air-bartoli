@@ -258,6 +258,60 @@ function render() {
     app.append(catBox);
 
   } else if (currentTheme === 'photos') {
+    // --- réglage interactif en direct des dimensions des photos
+    const currentSaisiePx = parseInt(localStorage.getItem('air_avatar_size_saisie') || '76', 10);
+    const currentRecPx = parseInt(localStorage.getItem('air_avatar_size_recompense') || '90', 10);
+
+    const sliderSaisie = el('input', {
+      type: 'range', min: '50', max: '110', step: '2', value: String(currentSaisiePx),
+      style: 'width:100%;margin:8px 0'
+    });
+    const labelSaisieVal = el('strong', {}, currentSaisiePx + ' px');
+    const previewSaisieAvatar = el('div', { class: 'kid-custom-avatar', style: 'margin:10px 0;display:flex;justify-content:center' },
+      avatar(children[0]?.first_name || 'Aperçu', { size: 'xl', customSrc: children[0]?.avatar || null }));
+
+    sliderSaisie.oninput = e => {
+      const val = e.target.value;
+      labelSaisieVal.textContent = val + ' px';
+      document.documentElement.style.setProperty('--avatar-size-saisie', val + 'px');
+      localStorage.setItem('air_avatar_size_saisie', val);
+    };
+
+    const sliderRec = el('input', {
+      type: 'range', min: '60', max: '140', step: '2', value: String(currentRecPx),
+      style: 'width:100%;margin:8px 0'
+    });
+    const labelRecVal = el('strong', {}, currentRecPx + ' px');
+    const previewRecAvatar = el('div', { class: 'recompense-custom-avatar', style: 'margin:10px 0;display:flex;justify-content:center' },
+      avatar(children[0]?.first_name || 'Aperçu', { size: 'xl', customSrc: children[0]?.avatar || null }));
+
+    sliderRec.oninput = e => {
+      const val = e.target.value;
+      labelRecVal.textContent = val + ' px';
+      document.documentElement.style.setProperty('--avatar-size-recompense', val + 'px');
+      localStorage.setItem('air_avatar_size_recompense', val);
+    };
+
+    app.append(el('div', { class: 'card', style: 'border:2px solid var(--cyan);background:#f0fdf4' },
+      el('h2', { style: 'color:var(--navy);display:flex;align-items:center;gap:8px' }, '📐 Dimensions des photos (réglage en direct)'),
+      el('p', { class: 'muted', style: 'margin-top:-6px' },
+        'Ajuste la taille des photos avec le curseur. L\'aperçu en direct s\'actualise immédiatement et s\'applique à toute l\'application :'),
+      el('div', { class: 'grid grid-2', style: 'margin-top:14px;gap:14px' },
+        el('div', { class: 'card', style: 'background:#fff;margin-bottom:0;text-align:center' },
+          el('h3', {}, 'Taille photo Saisie'),
+          el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+            el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Curseur'),
+            labelSaisieVal),
+          sliderSaisie,
+          previewSaisieAvatar),
+        el('div', { class: 'card', style: 'background:#fff;margin-bottom:0;text-align:center' },
+          el('h3', {}, 'Taille photo Récompenses'),
+          el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
+            el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Curseur'),
+            labelRecVal),
+          sliderRec,
+          previewRecAvatar))));
+
     // --- hub de gestion centralisée des photos (enfants, parents, récompenses)
     app.append(el('div', { class: 'card' },
       el('h2', {}, 'Photos de profil des enfants'),
