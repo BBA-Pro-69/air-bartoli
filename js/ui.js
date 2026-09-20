@@ -168,28 +168,41 @@ export function lineChart(series, { width = 640, height = 220 } = {}) {
 // ---------------------------------------------------------------------
 // Recadreur photo circulaire tactile (type LinkedIn / Instagram)
 // ---------------------------------------------------------------------
-export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, onSave }) {
-  const input = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
-  document.body.append(input);
+export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, existingSrc = null, onSave }) {
+  const chooseNewFile = () => {
+    const input = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+    document.body.append(input);
 
-  input.onchange = () => {
-    const file = input.files?.[0];
-    input.remove();
-    if (!file) return;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => startCropper(img, title, isCircle, onSave);
-      img.src = e.target.result;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => startCropper(img, title, isCircle, onSave, chooseNewFile);
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
     };
-    reader.readAsDataURL(file);
+
+    input.click();
   };
 
-  input.click();
+  // Si une photo existe déjà, on l'ouvre directement dans le recadreur
+  if (existingSrc) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => startCropper(img, title, isCircle, onSave, chooseNewFile);
+    img.onerror = () => chooseNewFile(); // Si échec de chargement, ouvrir le sélecteur
+    img.src = existingSrc;
+  } else {
+    chooseNewFile();
+  }
 }
 
-function startCropper(img, title, isCircle, onSave) {
+function startCropper(img, title, isCircle, onSave, onChooseOther = null) {
   let scale = 1;
   let minScale = 1;
   let posX = 0, posY = 0;
@@ -296,7 +309,18 @@ function startCropper(img, title, isCircle, onSave) {
 
   draw();
 
-  modal(title, body, [{
+  const actions = [];
+  if (onChooseOther) {
+    actions.push({
+      label: '📁 Choisir une autre photo',
+      class: 'btn-ghost',
+      onClick: close => {
+        close();
+        onChooseOther();
+      }
+    });
+  }
+  actions.push({
     label: 'Valider et enregistrer',
     class: 'btn-primary',
     onClick: async close => {
@@ -306,17 +330,10 @@ function startCropper(img, title, isCircle, onSave) {
       finalCanvas.height = 250;
       const fCtx = finalCanvas.getContext('2d');
 
-      const cropRadius = (targetSize / 2) - 10;
       const cropLeftInCanvas = 10;
       const cropTopInCanvas = 10;
 
-      const drawW = img.width * scale;
-      const drawH = img.height * scale;
-      const imgXInCanvas = targetSize / 2 - drawW / 2 + posX;
-      const imgYInCanvas = targetSize / 2 - drawH / 2 + posY;
-
       // Calcul de la zone de l'image source qui correspond à la zone de découpe
-      const ratio = 250 / (targetSize - 20);
       fCtx.drawImage(
         canvas,
         cropLeftInCanvas, cropTopInCanvas, targetSize - 20, targetSize - 20,
@@ -330,5 +347,7 @@ function startCropper(img, title, isCircle, onSave) {
         } catch (err) { fail(err); }
       }, 'image/jpeg', 0.86);
     }
-  }]);
+  });
+
+  modal(title, body, actions);
 }

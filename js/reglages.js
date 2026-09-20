@@ -122,6 +122,7 @@ function formRecompense(r) {
         openPhotoCropper({
           title: 'Photo de la récompense',
           isCircle: false,
+          existingSrc: currentImgUrl,
           onSave: async blob => {
             const url = await api.uploadMedia(blob, 'reward');
             currentImgUrl = url;
@@ -204,9 +205,10 @@ function render() {
                   openPhotoCropper({
                     title: 'Photo de ' + c.first_name,
                     isCircle: true,
+                    existingSrc: c.avatar || null,
                     onSave: async blob => {
                       const url = await api.uploadMedia(blob, 'child_' + c.id);
-                      await api.save('children', { id: c.id, avatar: url });
+                      await api.update('children', c.id, { avatar: url });
                       await reload();
                       toast('Photo de ' + c.first_name + ' mise à jour !');
                     }
@@ -276,9 +278,10 @@ function render() {
               openPhotoCropper({
                 title: 'Photo de ' + c.first_name,
                 isCircle: true,
+                existingSrc: c.avatar || null,
                 onSave: async blob => {
                   const url = await api.uploadMedia(blob, 'child_' + c.id);
-                  await api.save('children', { id: c.id, avatar: url });
+                  await api.update('children', c.id, { avatar: url });
                   await reload();
                   toast('Photo de ' + c.first_name + ' mise à jour !');
                 }
@@ -306,9 +309,10 @@ function render() {
               openPhotoCropper({
                 title: 'Photo de ' + p.display_name,
                 isCircle: true,
+                existingSrc: p.avatar_url || null,
                 onSave: async blob => {
                   const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
-                  await api.save('parents', { user_id: p.user_id, avatar_url: url });
+                  await api.updateParentProfile({ avatar_url: url });
                   await reload();
                   toast('Photo de ' + p.display_name + ' mise à jour !');
                 }
@@ -339,9 +343,10 @@ function render() {
               openPhotoCropper({
                 title: 'Photo : ' + r.label,
                 isCircle: false,
+                existingSrc: r.image_url || null,
                 onSave: async blob => {
                   const url = await api.uploadMedia(blob, 'reward_' + r.id);
-                  await api.save('rewards', { id: r.id, image_url: url });
+                  await api.update('rewards', r.id, { image_url: url });
                   await reload();
                   toast('Photo de récompense mise à jour !');
                 }

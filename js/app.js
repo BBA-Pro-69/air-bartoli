@@ -328,6 +328,7 @@ function openProfileModal() {
       openPhotoCropper({
         title: 'Ma photo de profil',
         isCircle: true,
+        existingSrc: currentAvatar || null,
         onSave: async blob => {
           const url = await uploadMedia(blob, 'parent_' + me.user_id);
           currentAvatar = url;
