@@ -7,16 +7,16 @@ import * as api from './api.js';
 import { el, toast, fail, modal, personLabel, openPhotoCropper, avatar } from './ui.js';
 
 let root = null;
-let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], famille = null, currentTheme = 'categories';
+let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], parents = [], famille = null, currentTheme = 'categories';
 const ETALON = 22;                      // points par semaine et par enfant
 
 const subs  = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
 
 async function reload() {
-  [children, cats, rewards, special, boosters, cinematic, contexts] = await Promise.all([
+  [children, cats, rewards, special, boosters, cinematic, contexts, parents] = await Promise.all([
     api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(),
-    api.getBoosterSettings(), api.getCinematicSettings(), api.getContexts().catch(() => [])]);
+    api.getBoosterSettings(), api.getCinematicSettings(), api.getContexts().catch(() => []), api.getParents().catch(() => [])]);
   render();
 }
 
@@ -170,6 +170,7 @@ function render() {
   // --- boutons de sélection thématiques (style Analyse, pas de débordement)
   const themes = [
     { id: 'categories', label: 'Catégories & barème' },
+    { id: 'photos',     label: '📷 Gestion des photos' },
     { id: 'boosters',   label: 'Boosters' },
     { id: 'rewards',    label: 'Récompenses' },
     { id: 'system',     label: 'Options & effets' }
@@ -252,6 +253,101 @@ function render() {
               (s.repairable ? ' · réparable' : '')))))));
     });
     app.append(catBox);
+
+  } else if (currentTheme === 'photos') {
+    // --- hub de gestion centralisée des photos (enfants, parents, récompenses)
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Photos de profil des enfants'),
+      el('p', { class: 'muted', style: 'margin-top:-6px' },
+        'Clique sur un enfant pour recadrer ou importer sa photo (cercle guide type LinkedIn) :'),
+      el('div', { class: 'grid grid-2', style: 'margin-top:14px' },
+        ...children.map(c => el('div', {
+          class: 'card',
+          style: `display:flex;align-items:center;gap:14px;margin-bottom:0;border-left:4px solid ${c.color}`
+        },
+          avatar(c.first_name, { size: 'lg', customSrc: c.avatar, title: c.first_name }),
+          el('div', { style: 'flex:1;min-width:0' },
+            el('strong', { style: 'font-size:1.05rem' }, c.first_name),
+            el('div', { class: 'muted', style: 'font-size:.8rem' }, c.avatar ? 'Photo personnalisée' : 'Photo par défaut')),
+          el('button', {
+            type: 'button',
+            class: 'btn btn-sm btn-primary',
+            onclick: () => {
+              openPhotoCropper({
+                title: 'Photo de ' + c.first_name,
+                isCircle: true,
+                onSave: async blob => {
+                  const url = await api.uploadMedia(blob, 'child_' + c.id);
+                  await api.save('children', { id: c.id, avatar: url });
+                  await reload();
+                  toast('Photo de ' + c.first_name + ' mise à jour !');
+                }
+              });
+            }
+          }, 'Cadrer'))))));
+
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Photos des parents'),
+      el('p', { class: 'muted', style: 'margin-top:-6px' },
+        'Personnalise les photos de profil des parents de la famille :'),
+      el('div', { class: 'grid grid-2', style: 'margin-top:14px' },
+        ...parents.map(p => el('div', {
+          class: 'card',
+          style: 'display:flex;align-items:center;gap:14px;margin-bottom:0'
+        },
+          avatar(p.display_name, { size: 'lg', customSrc: p.avatar_url, title: p.display_name }),
+          el('div', { style: 'flex:1;min-width:0' },
+            el('strong', { style: 'font-size:1.05rem' }, p.display_name),
+            el('div', { class: 'muted', style: 'font-size:.8rem' }, p.avatar_url ? 'Photo personnalisée' : 'Photo par défaut')),
+          el('button', {
+            type: 'button',
+            class: 'btn btn-sm btn-primary',
+            onclick: () => {
+              openPhotoCropper({
+                title: 'Photo de ' + p.display_name,
+                isCircle: true,
+                onSave: async blob => {
+                  const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
+                  await api.save('parents', { user_id: p.user_id, avatar_url: url });
+                  await reload();
+                  toast('Photo de ' + p.display_name + ' mise à jour !');
+                }
+              });
+            }
+          }, 'Cadrer'))))));
+
+    const rewardsWithImages = rewards.filter(r => r.active);
+    app.append(el('div', { class: 'card' },
+      el('h2', {}, 'Photos des récompenses du catalogue'),
+      el('p', { class: 'muted', style: 'margin-top:-6px' },
+        'Associe une image cadrée pour chaque cadeau ou sortie collective :'),
+      el('div', { class: 'grid grid-2', style: 'margin-top:14px' },
+        ...rewardsWithImages.map(r => el('div', {
+          class: 'card',
+          style: 'display:flex;align-items:center;gap:14px;margin-bottom:0'
+        },
+          r.image_url
+            ? el('img', { src: r.image_url, style: 'width:60px;height:60px;border-radius:12px;object-fit:cover;border:1px solid var(--line)' })
+            : el('span', { style: 'width:60px;height:60px;border-radius:12px;background:#e2e8f0;display:grid;place-items:center;font-size:1.5rem' }, '🎁'),
+          el('div', { style: 'flex:1;min-width:0' },
+            el('strong', { style: 'font-size:.95rem' }, r.label),
+            el('div', { class: 'muted', style: 'font-size:.8rem' }, r.cost + ' pts')),
+          el('button', {
+            type: 'button',
+            class: 'btn btn-sm',
+            onclick: () => {
+              openPhotoCropper({
+                title: 'Photo : ' + r.label,
+                isCircle: false,
+                onSave: async blob => {
+                  const url = await api.uploadMedia(blob, 'reward_' + r.id);
+                  await api.save('rewards', { id: r.id, image_url: url });
+                  await reload();
+                  toast('Photo de récompense mise à jour !');
+                }
+              });
+            }
+          }, r.image_url ? 'Modifier' : 'Ajouter'))))));
 
   } else if (currentTheme === 'boosters') {
     // --- boosters calendaires

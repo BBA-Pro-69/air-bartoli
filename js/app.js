@@ -222,7 +222,10 @@ function initMenuSheetDrag() {
   // les valeurs historiques de cinematics.js restent utilisées.
   try { setCinematicThresholds(await getCinematicSettings()); } catch (_) {}
 
-  byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs' }), document.createElement('span'));
+  // Appliquer le thème enregistré de l'utilisateur
+  if (me.theme) document.documentElement.setAttribute('data-theme', me.theme);
+
+  byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs', customSrc: me.avatar_url }), document.createElement('span'));
   byId('userName').lastElementChild.textContent = me.display_name;
   byId('appShell').hidden = false;
   byId('bootScreen').remove();
@@ -264,6 +267,7 @@ function initMenuSheetDrag() {
   byId('menuBg').onclick = closeMenu;
   byId('menuClose').onclick = closeMenu;
   byId('btnLogout').onclick = signOut;
+  byId('btnProfile')?.addEventListener('click', () => openProfileModal());
   byId('btnUpdate').onclick = async () => {
     const r = await checkForUpdates();
     if (r === 'a-jour') toast('Tu es déjà sur la dernière version.');
@@ -287,3 +291,116 @@ function initMenuSheetDrag() {
     showBootError(error);
   }
 })();
+
+// ---------------------------------------------------------------------
+// Gestion du profil parent & Thème visuel
+// ---------------------------------------------------------------------
+import { openPhotoCropper, modal } from './ui.js';
+import { updateParentProfile, uploadMedia } from './api.js';
+
+const THEMES = [
+  { id: 'aero',    label: 'Aéro (Navy & Cyan)',       color: '#00A7E1', bg: '#0B2046' },
+  { id: 'dark',    label: 'Nuit Polaire (Sombre)',    color: '#38bdf8', bg: '#0b1329' },
+  { id: 'rose',    label: 'Rose Poudré & Berry',      color: '#db2777', bg: '#4a0e2e' },
+  { id: 'emerald', label: 'Émeraude & Forêt',         color: '#059669', bg: '#064e3b' },
+  { id: 'amber',   label: 'Sunset & Ambre',           color: '#d97706', bg: '#451a03' }
+];
+
+function openProfileModal() {
+  closeMenu();
+  let currentAvatar = me.avatar_url;
+  let currentTheme = me.theme || 'aero';
+
+  const avatarBox = document.createElement('div');
+  avatarBox.style.cssText = 'display:flex;flex-direction:column;align-items:center;margin-bottom:16px';
+
+  function renderAvatarPreview() {
+    avatarBox.innerHTML = '';
+    avatarBox.append(
+      avatar(me.display_name, { size: 'xl', customSrc: currentAvatar, title: me.display_name })
+    );
+    const btnChange = document.createElement('button');
+    btnChange.type = 'button';
+    btnChange.className = 'btn btn-sm';
+    btnChange.style.marginTop = '10px';
+    btnChange.textContent = currentAvatar ? 'Changer ma photo' : '📷 Ajouter ma photo';
+    btnChange.onclick = () => {
+      openPhotoCropper({
+        title: 'Ma photo de profil',
+        isCircle: true,
+        onSave: async blob => {
+          const url = await uploadMedia(blob, 'parent_' + me.user_id);
+          currentAvatar = url;
+          renderAvatarPreview();
+          toast('Photo cadrée et prête à être enregistrée !');
+        }
+      });
+    };
+    avatarBox.append(btnChange);
+  }
+  renderAvatarPreview();
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.value = me.display_name || '';
+  nameInput.required = true;
+
+  // Sélecteur de thèmes
+  const themeContainer = document.createElement('div');
+  themeContainer.className = 'chips';
+  themeContainer.style.marginTop = '6px';
+
+  THEMES.forEach(t => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip' + (currentTheme === t.id ? ' on' : '');
+    btn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;font-weight:600';
+    btn.innerHTML = `<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${t.color};border:1.5px solid ${t.bg}"></span>${t.label}`;
+    btn.onclick = () => {
+      currentTheme = t.id;
+      document.documentElement.setAttribute('data-theme', t.id);
+      themeContainer.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+      btn.classList.add('on');
+    };
+    themeContainer.append(btn);
+  });
+
+  const body = document.createElement('div');
+  body.append(avatarBox);
+
+  const nameField = document.createElement('div');
+  nameField.className = 'field';
+  nameField.innerHTML = '<label>Mon prénom / nom affiché</label>';
+  nameField.append(nameInput);
+  body.append(nameField);
+
+  const themeField = document.createElement('div');
+  themeField.className = 'field';
+  themeField.innerHTML = '<label>Thème visuel de l’application</label>';
+  themeField.append(themeContainer);
+  body.append(themeField);
+
+  modal('Mon profil & Thème', body, [{
+    label: 'Enregistrer mon profil',
+    class: 'btn-primary',
+    onClick: async close => {
+      const newName = nameInput.value.trim();
+      if (!newName) return;
+      try {
+        const updated = await updateParentProfile({
+          display_name: newName,
+          avatar_url: currentAvatar,
+          theme: currentTheme
+        });
+        me.display_name = updated.display_name;
+        me.avatar_url = updated.avatar_url;
+        me.theme = updated.theme;
+        document.documentElement.setAttribute('data-theme', me.theme);
+        byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs', customSrc: me.avatar_url }), document.createElement('span'));
+        byId('userName').lastElementChild.textContent = me.display_name;
+        close();
+        toast('Profil et thème enregistrés avec succès !');
+      } catch (err) { fail(err); }
+    }
+  }]);
+}

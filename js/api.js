@@ -68,7 +68,7 @@ export async function requireSession() {
   const { data } = await sb.auth.getSession();
   if (!data.session) { location.href = 'login.html'; return null; }
   const { data: me } = await sb.from('parents')
-    .select('display_name, family_id').eq('user_id', data.session.user.id).maybeSingle();
+    .select('user_id, display_name, family_id, avatar_url, theme').eq('user_id', data.session.user.id).maybeSingle();
   if (!me) {
     document.body.innerHTML =
       '<div class="boot-error"><h1>Compte non rattaché</h1><p>Ce compte existe mais ' +
@@ -189,4 +189,17 @@ export async function uploadMedia(fileBlob, folder = 'avatars', fileName = null)
   if (error) throw error;
   const { data: pub } = sb.storage.from('avatars').getPublicUrl(name);
   return pub.publicUrl;
+}
+
+export const getParents = () => rows(sb.from('parents').select('*'));
+export async function updateParentProfile({ display_name, avatar_url, theme }) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error('Non connecté.');
+  const updates = {};
+  if (display_name !== undefined) updates.display_name = display_name;
+  if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+  if (theme !== undefined) updates.theme = theme;
+  const { data, error } = await sb.from('parents').update(updates).eq('user_id', session.user.id).select().single();
+  if (error) throw error;
+  return data;
 }

@@ -683,3 +683,36 @@ body.menu-open{overscroll-behavior-y:contain;overflow:hidden}
 /* ---- recadreur photo circulaire tactile ---- */
 .cropper-canvas{touch-action:none;border-radius:18px;background:#0b2046;cursor:grab;box-shadow:0 4px 14px rgba(11,32,70,.25)}
 .cropper-canvas:active{cursor:grabbing}
+
+/* =====================================================================
+   Thèmes d'application (personnalisables par utilisateur)
+   ===================================================================== */
+/* 1. Thème Aéro / Original (Navy & Cyan) */
+:root, [data-theme="aero"] {
+  --navy: #0B2046; --cyan: #00A7E1; --cyan-d: #0369a1;
+  --bg: #f6f8fb; --card: #ffffff; --ink: #0f172a; --line: #e2e8f0;
+}
+
+/* 2. Thème Nuit Polaire (Sombre & Cyan électrique) */
+[data-theme="dark"] {
+  --navy: #071026; --cyan: #38bdf8; --cyan-d: #0ea5e9;
+  --bg: #0b1329; --card: #111d38; --ink: #f1f5f9; --muted: #94a3b8; --line: #1e293b;
+}
+
+/* 3. Thème Rose Poudré & Berry (Féminin & Doux) */
+[data-theme="rose"] {
+  --navy: #4a0e2e; --cyan: #db2777; --cyan-d: #be185d;
+  --bg: #fdf2f8; --card: #ffffff; --ink: #370617; --muted: #831843; --line: #fbcfe8;
+}
+
+/* 4. Thème Émeraude & Forêt (Nature & Vivifiant) */
+[data-theme="emerald"] {
+  --navy: #064e3b; --cyan: #059669; --cyan-d: #047857;
+  --bg: #f0fdf4; --card: #ffffff; --ink: #022c22; --muted: #065f46; --line: #bbf7d0;
+}
+
+/* 5. Thème Sunset & Ambre (Chaleureux & Ensoleillé) */
+[data-theme="amber"] {
+  --navy: #451a03; --cyan: #d97706; --cyan-d: #b45309;
+  --bg: #fffbeb; --card: #ffffff; --ink: #291202; --muted: #78350f; --line: #fde68a;
+}
