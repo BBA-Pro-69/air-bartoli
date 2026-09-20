@@ -319,25 +319,50 @@ function openProfileModal() {
     avatarBox.append(
       avatar(me.display_name, { size: 'xl', customSrc: currentAvatar, title: me.display_name })
     );
-    const btnChange = document.createElement('button');
-    btnChange.type = 'button';
-    btnChange.className = 'btn btn-sm';
-    btnChange.style.marginTop = '10px';
-    btnChange.textContent = currentAvatar ? 'Changer ma photo' : '📷 Ajouter ma photo';
-    btnChange.onclick = () => {
+    const btnRow = document.createElement('div');
+    btnRow.className = 'row';
+    btnRow.style.cssText = 'gap:8px;margin-top:12px;justify-content:center';
+
+    if (currentAvatar) {
+      const btnCrop = document.createElement('button');
+      btnCrop.type = 'button';
+      btnCrop.className = 'btn btn-sm btn-primary';
+      btnCrop.textContent = 'Cadrer';
+      btnCrop.onclick = () => {
+        openPhotoCropper({
+          title: 'Cadrer ma photo de profil',
+          isCircle: true,
+          existingSrc: currentAvatar,
+          onSave: async blob => {
+            const url = await uploadMedia(blob, 'parent_' + me.user_id);
+            currentAvatar = url;
+            renderAvatarPreview();
+            toast('Photo cadrée et prête à être enregistrée !');
+          }
+        });
+      };
+      btnRow.append(btnCrop);
+    }
+
+    const btnModify = document.createElement('button');
+    btnModify.type = 'button';
+    btnModify.className = 'btn btn-sm';
+    btnModify.textContent = currentAvatar ? 'Modifier' : '📷 Ajouter ma photo';
+    btnModify.onclick = () => {
       openPhotoCropper({
-        title: 'Ma photo de profil',
+        title: 'Nouvelle photo de profil',
         isCircle: true,
-        existingSrc: currentAvatar || null,
+        existingSrc: null,
         onSave: async blob => {
           const url = await uploadMedia(blob, 'parent_' + me.user_id);
           currentAvatar = url;
           renderAvatarPreview();
-          toast('Photo cadrée et prête à être enregistrée !');
+          toast('Nouvelle photo prête à être enregistrée !');
         }
       });
     };
-    avatarBox.append(btnChange);
+    btnRow.append(btnModify);
+    avatarBox.append(btnRow);
   }
   renderAvatarPreview();
 

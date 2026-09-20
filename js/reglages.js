@@ -271,23 +271,43 @@ function render() {
           el('div', { style: 'flex:1;min-width:0' },
             el('strong', { style: 'font-size:1.05rem' }, c.first_name),
             el('div', { class: 'muted', style: 'font-size:.8rem' }, c.avatar ? 'Photo personnalisée' : 'Photo par défaut')),
-          el('button', {
-            type: 'button',
-            class: 'btn btn-sm btn-primary',
-            onclick: () => {
-              openPhotoCropper({
-                title: 'Photo de ' + c.first_name,
-                isCircle: true,
-                existingSrc: c.avatar || null,
-                onSave: async blob => {
-                  const url = await api.uploadMedia(blob, 'child_' + c.id);
-                  await api.update('children', c.id, { avatar: url });
-                  await reload();
-                  toast('Photo de ' + c.first_name + ' mise à jour !');
-                }
-              });
-            }
-          }, 'Cadrer'))))));
+          el('div', { class: 'row', style: 'gap:6px' },
+            el('button', {
+              type: 'button',
+              class: 'btn btn-sm btn-primary',
+              title: 'Recadrer la photo actuelle',
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Cadrer la photo de ' + c.first_name,
+                  isCircle: true,
+                  existingSrc: c.avatar || null,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'child_' + c.id);
+                    await api.update('children', c.id, { avatar: url });
+                    await reload();
+                    toast('Photo de ' + c.first_name + ' mise à jour !');
+                  }
+                });
+              }
+            }, 'Cadrer'),
+            el('button', {
+              type: 'button',
+              class: 'btn btn-sm',
+              title: 'Choisir une nouvelle photo',
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Nouvelle photo de ' + c.first_name,
+                  isCircle: true,
+                  existingSrc: null,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'child_' + c.id);
+                    await api.update('children', c.id, { avatar: url });
+                    await reload();
+                    toast('Nouvelle photo de ' + c.first_name + ' enregistrée !');
+                  }
+                });
+              }
+            }, 'Modifier')))))));
 
     app.append(el('div', { class: 'card' },
       el('h2', {}, 'Photos des parents'),
@@ -302,23 +322,43 @@ function render() {
           el('div', { style: 'flex:1;min-width:0' },
             el('strong', { style: 'font-size:1.05rem' }, p.display_name),
             el('div', { class: 'muted', style: 'font-size:.8rem' }, p.avatar_url ? 'Photo personnalisée' : 'Photo par défaut')),
-          el('button', {
-            type: 'button',
-            class: 'btn btn-sm btn-primary',
-            onclick: () => {
-              openPhotoCropper({
-                title: 'Photo de ' + p.display_name,
-                isCircle: true,
-                existingSrc: p.avatar_url || null,
-                onSave: async blob => {
-                  const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
-                  await api.updateParentProfile({ avatar_url: url });
-                  await reload();
-                  toast('Photo de ' + p.display_name + ' mise à jour !');
-                }
-              });
-            }
-          }, 'Cadrer'))))));
+          el('div', { class: 'row', style: 'gap:6px' },
+            el('button', {
+              type: 'button',
+              class: 'btn btn-sm btn-primary',
+              title: 'Recadrer la photo actuelle',
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Cadrer la photo de ' + p.display_name,
+                  isCircle: true,
+                  existingSrc: p.avatar_url || null,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
+                    await api.updateParentProfile({ avatar_url: url });
+                    await reload();
+                    toast('Photo de ' + p.display_name + ' mise à jour !');
+                  }
+                });
+              }
+            }, 'Cadrer'),
+            el('button', {
+              type: 'button',
+              class: 'btn btn-sm',
+              title: 'Choisir une nouvelle photo',
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Nouvelle photo de ' + p.display_name,
+                  isCircle: true,
+                  existingSrc: null,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
+                    await api.updateParentProfile({ avatar_url: url });
+                    await reload();
+                    toast('Nouvelle photo de ' + p.display_name + ' enregistrée !');
+                  }
+                });
+              }
+            }, 'Modifier')))))));
 
     const rewardsWithImages = rewards.filter(r => r.active);
     app.append(el('div', { class: 'card' },
@@ -336,23 +376,43 @@ function render() {
           el('div', { style: 'flex:1;min-width:0' },
             el('strong', { style: 'font-size:.95rem' }, r.label),
             el('div', { class: 'muted', style: 'font-size:.8rem' }, r.cost + ' pts')),
-          el('button', {
-            type: 'button',
-            class: 'btn btn-sm',
-            onclick: () => {
-              openPhotoCropper({
-                title: 'Photo : ' + r.label,
-                isCircle: false,
-                existingSrc: r.image_url || null,
-                onSave: async blob => {
-                  const url = await api.uploadMedia(blob, 'reward_' + r.id);
-                  await api.update('rewards', r.id, { image_url: url });
-                  await reload();
-                  toast('Photo de récompense mise à jour !');
-                }
-              });
-            }
-          }, r.image_url ? 'Modifier' : 'Ajouter'))))));
+          el('div', { class: 'row', style: 'gap:6px' },
+            r.image_url ? el('button', {
+              type: 'button',
+              class: 'btn btn-sm btn-primary',
+              title: 'Recadrer l\'image actuelle',
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Cadrer : ' + r.label,
+                  isCircle: false,
+                  existingSrc: r.image_url,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'reward_' + r.id);
+                    await api.update('rewards', r.id, { image_url: url });
+                    await reload();
+                    toast('Photo de récompense recadrée !');
+                  }
+                });
+              }
+            }, 'Cadrer') : null,
+            el('button', {
+              type: 'button',
+              class: 'btn btn-sm',
+              title: r.image_url ? 'Remplacer par une autre photo' : 'Importer une photo',
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Photo : ' + r.label,
+                  isCircle: false,
+                  existingSrc: null,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'reward_' + r.id);
+                    await api.update('rewards', r.id, { image_url: url });
+                    await reload();
+                    toast('Nouvelle photo de récompense enregistrée !');
+                  }
+                });
+              }
+            }, r.image_url ? 'Modifier' : 'Ajouter')))))));
 
   } else if (currentTheme === 'boosters') {
     // --- boosters calendaires
