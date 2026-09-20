@@ -137,7 +137,7 @@ function rewardCard(r) {
   return el('div', { class: 'reward' + (ready ? ' ready' : '') },
     r.image_url ? el('img', {
       src: r.image_url,
-      style: 'width:100%;height:130px;object-fit:cover;border-radius:10px;margin-bottom:10px;border:1px solid var(--line)'
+      class: 'reward-img'
     }) : null,
     el('div', { class: 'reward-top' },
       el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),
@@ -159,7 +159,7 @@ function collectiveCard(r) {
   return el('div', { class: 'reward' + (ok ? ' ready' : '') },
     r.image_url ? el('img', {
       src: r.image_url,
-      style: 'width:100%;height:130px;object-fit:cover;border-radius:10px;margin-bottom:10px;border:1px solid var(--line)'
+      class: 'reward-img'
     }) : null,
     el('div', { class: 'reward-top' },
       el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),

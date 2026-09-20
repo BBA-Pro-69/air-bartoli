@@ -716,3 +716,6 @@ body.menu-open{overscroll-behavior-y:contain;overflow:hidden}
   --navy: #451a03; --cyan: #d97706; --cyan-d: #b45309;
   --bg: #fffbeb; --card: #ffffff; --ink: #291202; --muted: #78350f; --line: #fde68a;
 }
+
+/* ---- image de recompense au format 16:9 rigoureux ---- */
+.reward-img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin-bottom:12px;border:1px solid var(--line);box-shadow:0 2px 6px rgba(15,23,42,.06)}

@@ -245,14 +245,40 @@ export function openPhotoCropper({ title = 'Cadrer la photo', isCircle = true, a
     }]);
   };
 
+  const openSourceChoice = () => {
+    const choiceBody = el('div', { style: 'display:grid;gap:12px;padding:6px 0' },
+      el('button', {
+        type: 'button',
+        class: 'btn btn-primary',
+        style: 'min-height:50px;justify-content:center;font-size:1rem',
+        onclick: () => { closeChoice(); chooseNewFile(); }
+      }, '📁 Choisir depuis mon appareil / photo'),
+      el('button', {
+        type: 'button',
+        class: 'btn btn-ghost',
+        style: 'min-height:50px;justify-content:center;font-size:1rem;border:1.5px solid var(--line)',
+        onclick: () => { closeChoice(); promptWebUrl(); }
+      }, '🌐 Coller une URL d\'image web'));
+
+    let closeChoice = () => {};
+    modal(title || 'Source de l\'image', choiceBody, [{
+      label: 'Annuler',
+      class: 'btn-ghost',
+      onClick: close => { close(); }
+    }]);
+    // Capturer la fonction close de modal
+    const closeBtn = document.querySelector('.modal-backdrop:last-of-type .modal-foot button');
+    if (closeBtn) closeChoice = () => closeBtn.click();
+  };
+
   if (existingSrc) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => startCropper(img, title, isCircle, aspectRatio, onSave, chooseNewFile, promptWebUrl);
-    img.onerror = () => chooseNewFile();
+    img.onerror = () => openSourceChoice();
     img.src = existingSrc;
   } else {
-    chooseNewFile();
+    openSourceChoice();
   }
 }
 
@@ -295,8 +321,8 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
 
     ctx.drawImage(img, targetW / 2 - drawW / 2 + posX, targetH / 2 - drawH / 2 + posY, drawW, drawH);
 
-    // 2. Masque sombre semi-transparent
-    ctx.fillStyle = 'rgba(11, 32, 70, 0.65)';
+    // 2. Zone extérieure assombrie très légèrement et neutre (sans teinte bleue)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
     ctx.rect(0, 0, targetW, targetH);
     if (isCircle) {
@@ -306,9 +332,9 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
     }
     ctx.fill();
 
-    // 3. Bordure du cadre guide
-    ctx.strokeStyle = '#00A7E1';
-    ctx.lineWidth = 2.5;
+    // 3. Bordure nette du cadre guide
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
     ctx.beginPath();
     if (isCircle) {
       ctx.arc(targetW / 2, targetH / 2, cropW / 2, 0, Math.PI * 2);
@@ -316,6 +342,21 @@ function startCropper(img, title, isCircle, aspectRatio, onSave, onChooseOther =
       ctx.rect(pad, pad, cropW, cropH);
     }
     ctx.stroke();
+
+    // Coins de repère discrets
+    if (!isCircle) {
+      ctx.strokeStyle = 'var(--cyan, #00A7E1)';
+      ctx.lineWidth = 3;
+      const corner = 14;
+      // Haut gauche
+      ctx.beginPath(); ctx.moveTo(pad, pad + corner); ctx.lineTo(pad, pad); ctx.lineTo(pad + corner, pad); ctx.stroke();
+      // Haut droit
+      ctx.beginPath(); ctx.moveTo(pad + cropW - corner, pad); ctx.lineTo(pad + cropW, pad); ctx.lineTo(pad + cropW, pad + corner); ctx.stroke();
+      // Bas gauche
+      ctx.beginPath(); ctx.moveTo(pad, pad + cropH - corner); ctx.lineTo(pad, pad + cropH); ctx.lineTo(pad + corner, pad + cropH); ctx.stroke();
+      // Bas droit
+      ctx.beginPath(); ctx.moveTo(pad + cropW - corner, pad + cropH); ctx.lineTo(pad + cropW, pad + cropH); ctx.lineTo(pad + cropW, pad + cropH - corner); ctx.stroke();
+    }
 
     ctx.restore();
   }
