@@ -64,7 +64,9 @@ function renderGlobalScores() {
         el('span', { title: 'Portefeuille (dépenses du quotidien)', style: 'background:#f0f9ff;color:var(--cyan-d);padding:3px 7px;border-radius:8px;border:1px solid #bae6fd' },
           '👛 ' + (b.wallet_balance ?? bal(c.id))),
         el('span', { title: 'Tirelire Magique (épargne avec intérêts)', style: 'background:#fdf4ff;color:#a21caf;padding:3px 7px;border-radius:8px;border:1px solid #f5d0fe' },
-          '🐷 ' + (b.savings_balance ?? 0))))));
+          '🐷 ' + (b.savings_balance ?? 0))
+      )
+    ));
   });
 }
 
