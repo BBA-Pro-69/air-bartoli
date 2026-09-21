@@ -152,6 +152,10 @@ export const approveRedemption = (id) => rpc('approve_redemption', { p_redemptio
 export const claimReward = (reward_id, shares) => rpc('claim_reward', { p_reward_id: reward_id, p_shares: shares });
 export const applyPeriodBoosters = () => rpc('apply_period_boosters', {});
 export const deleteCategory = (category_id) => rpc('delete_category', { p_category_id: category_id });
+export const getSavingsSettings = () => sb.from('savings_settings').select('*').maybeSingle().then(r => r.data || { annual_interest_rate: 12.00, active: true });
+export const settleDailyPoints = () => rpc('settle_daily_points', {});
+export const applyMonthlyInterest = () => rpc('apply_monthly_interest', {});
+
 
 // Tables de parametrage : ecriture directe autorisee par la RLS.
 export async function save(table, row) {

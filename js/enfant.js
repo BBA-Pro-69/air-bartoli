@@ -65,12 +65,32 @@ function render() {
       onclick: () => { current = k.id; render(); }
     }, avatar(k.first_name, { size: 'md', customSrc: k.avatar, title: k.first_name })))));
 
-  // Bandeau synthétique : photo XL et solde de points
-  app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046);padding:24px 16px;text-align:center` },
-    el('div', { class: 'recompense-custom-avatar', style: 'display:flex;justify-content:center;margin-bottom:10px' },
+  // Bandeau synthétique : photo XL, solde total et répartition Portefeuille / Tirelire Magique
+  const balObj = balances.find(x => x.child_id === current) || {};
+  const walletPts = balObj.wallet_balance ?? b;
+  const savingsPts = balObj.savings_balance ?? 0;
+  const todayPending = balObj.today_pending ?? 0;
+
+  app.append(el('div', { class: 'hero', style: `background:linear-gradient(150deg,${c.color},#0B2046);padding:22px 16px;text-align:center` },
+    el('div', { class: 'recompense-custom-avatar', style: 'display:flex;justify-content:center;margin-bottom:8px' },
       avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name })),
-    el('div', { class: 'hero-balance', style: 'font-size:3rem;line-height:1;margin-top:4px' }, String(b)),
-    el('div', { class: 'hero-sub', style: 'font-size:1rem;font-weight:600;opacity:.9' }, 'points à dépenser')));
+    el('div', { class: 'hero-balance', style: 'font-size:2.8rem;line-height:1;margin-top:4px' }, String(b)),
+    el('div', { class: 'hero-sub', style: 'font-size:.9rem;font-weight:600;opacity:.9;margin-bottom:12px' }, 'points disponibles acquis'),
+    el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:380px;margin:10px auto 0' },
+      el('div', { style: 'background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 6px;text-align:center' },
+        el('div', { style: 'font-size:1.3rem' }, '👛'),
+        el('div', { style: 'font-size:1.4rem;font-weight:900;color:#fff' }, String(walletPts)),
+        el('div', { style: 'font-size:.76rem;color:rgba(255,255,255,.95);font-weight:700' }, 'Portefeuille'),
+        el('div', { style: 'font-size:.66rem;color:rgba(255,255,255,.75)' }, 'dépenses libres')),
+      el('div', { style: 'background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 6px;text-align:center' },
+        el('div', { style: 'font-size:1.3rem' }, '🐷✨'),
+        el('div', { style: 'font-size:1.4rem;font-weight:900;color:#fff' }, String(savingsPts)),
+        el('div', { style: 'font-size:.76rem;color:rgba(255,255,255,.95);font-weight:700' }, 'Tirelire Magique'),
+        el('div', { style: 'font-size:.66rem;color:rgba(255,255,255,.75)' }, 'grands projets & +intérêts'))),
+    (todayPending > 0
+      ? el('div', { style: 'margin-top:12px;display:inline-flex;align-items:center;gap:6px;background:rgba(0,167,225,.3);border:1px solid rgba(0,167,225,.5);padding:4px 12px;border-radius:999px;font-size:.76rem;color:#fff;font-weight:700' },
+          '✈️ +' + todayPending + ' pt' + (todayPending > 1 ? 's' : '') + ' en cours de vol (versés cette nuit à minuit)')
+      : null)));
 
   // Séparateur avec titre centré
   app.append(divider('Récompenses'));
@@ -131,7 +151,8 @@ function renderCatalogSection(app) {
 }
 
 function rewardCard(r) {
-  const b = bal(current);
+  const bo = balances.find(x => x.child_id === current) || {};
+  const b = bo.wallet_balance ?? bal(current);
   const e = elig.find(x => x.reward_id === r.id && x.child_id === current) || {};
   const ready = b >= r.cost;
   return el('div', { class: 'reward' + (ready ? ' ready' : '') },
@@ -140,11 +161,14 @@ function rewardCard(r) {
       class: 'reward-img'
     }) : null,
     el('div', { class: 'reward-top' },
-      el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),
+      el('div', {},
+        el('strong', {}, r.label),
+        el('div', { style: 'font-size:.72rem;color:var(--cyan-d);font-weight:700;margin-top:2px' }, '👛 Payé avec ton Portefeuille')),
+      el('span', { class: 'reward-cost' }, r.cost + ' pts')),
     el('div', { style: 'margin:10px 0 6px' }, gauge(b, r.cost, kid(current).color)),
     el('div', { class: 'eta' }, ready
       ? el('strong', {}, 'Objectif atteint ! Prêt à être attribué.')
-      : el('span', {}, 'Il manque ', el('strong', {}, (r.cost - b) + ' points'), ', ', etaText(e.days_left))),
+      : el('span', {}, 'Il manque ', el('strong', {}, (r.cost - b) + ' points'), ' dans ton Portefeuille, ', etaText(e.days_left))),
     ready ? el('button', {
       class: 'btn btn-primary btn-block reward-action-btn',
       style: 'margin-top:12px;width:100%',
@@ -153,8 +177,9 @@ function rewardCard(r) {
 }
 
 function collectiveCard(r) {
-  const total = children.reduce((s, c) => s + bal(c.id), 0);
-  const manquants = children.filter(c => bal(c.id) < r.min_per_child);
+  const getSavings = id => (balances.find(x => x.child_id === id) || {}).savings_balance ?? bal(id);
+  const total = children.reduce((s, c) => s + getSavings(c.id), 0);
+  const manquants = children.filter(c => getSavings(c.id) < r.min_per_child);
   const ok = total >= r.cost && !manquants.length;
   return el('div', { class: 'reward' + (ok ? ' ready' : '') },
     r.image_url ? el('img', {
@@ -162,14 +187,20 @@ function collectiveCard(r) {
       class: 'reward-img'
     }) : null,
     el('div', { class: 'reward-top' },
-      el('strong', {}, r.label), el('span', { class: 'reward-cost' }, r.cost + ' pts')),
-    el('div', { style: 'margin:10px 0 6px' }, gauge(total, r.cost, 'var(--cyan)')),
-    el('div', { class: 'eta' }, 'Cagnotte : ', el('strong', {}, total + ' / ' + r.cost),
+      el('div', {},
+        el('strong', {}, r.label),
+        el('div', { style: 'font-size:.72rem;color:#a21caf;font-weight:700;margin-top:2px' }, '🐷 Payé avec la Tirelire Magique')),
+      el('span', { class: 'reward-cost' }, r.cost + ' pts')),
+    el('div', { style: 'margin:10px 0 6px' }, gauge(total, r.cost, '#a21caf')),
+    el('div', { class: 'eta' }, 'Cagnotte Tirelire : ', el('strong', {}, total + ' / ' + r.cost),
       ' · minimum ' + r.min_per_child + ' par personne'),
     el('div', { class: 'eta' },
-      ...children.map(c => el('div', { style: 'display:flex;align-items:center;gap:6px' },
-        avatar(c.first_name, { size: 'xs', title: c.first_name }), ' : ' + bal(c.id) +
-        (bal(c.id) >= r.min_per_child ? ' ✓' : ' (il manque ' + (r.min_per_child - bal(c.id)) + ')')))),
+      ...children.map(c => {
+        const s = getSavings(c.id);
+        return el('div', { style: 'display:flex;align-items:center;gap:6px' },
+          avatar(c.first_name, { size: 'xs', title: c.first_name }), ' : ' + s + ' pts en Tirelire' +
+          (s >= r.min_per_child ? ' ✓' : ' (il manque ' + (r.min_per_child - s) + ')'));
+      })),
     ok ? el('button', {
       class: 'btn btn-primary btn-block reward-action-btn',
       style: 'margin-top:12px;width:100%',
@@ -178,8 +209,9 @@ function collectiveCard(r) {
 }
 
 function splitModal(r) {
-  const total = children.reduce((s, c) => s + bal(c.id), 0);
-  let parts = children.map(c => Math.max(r.min_per_child, Math.round(r.cost * bal(c.id) / total)));
+  const getSavings = id => (balances.find(x => x.child_id === id) || {}).savings_balance ?? bal(id);
+  const total = children.reduce((s, c) => s + getSavings(c.id), 0);
+  let parts = children.map(c => Math.max(r.min_per_child, Math.round(r.cost * getSavings(c.id) / total)));
   const fix = () => {
     const diff = r.cost - parts.reduce((a, b) => a + b, 0);
     const i = parts.indexOf(Math.max(...parts));

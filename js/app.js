@@ -4,7 +4,7 @@
 //  comme le mode application de Chicago-Bruno-Chris. Le glissement
 //  horizontal fait défiler les vues, la barre basse les sélectionne.
 // =====================================================================
-import { requireSession, signOut, getCinematicSettings, applyPeriodBoosters } from './api.js';
+import { requireSession, signOut, getCinematicSettings, applyPeriodBoosters, settleDailyPoints, applyMonthlyInterest } from './api.js';
 import { toast, fail, avatar } from './ui.js';
 import { initPWA, checkForUpdates, syncInstallUI, vibrate, isStandalone } from './pwa.js';
 import { initTouchFeedback, setCinematicThresholds } from './cinematics.js';
@@ -217,6 +217,7 @@ function initMenuSheetDrag() {
   // Les périodes closes sont évaluées automatiquement. La contrainte unique
   // en base rend l'appel idempotent si les deux parents ouvrent l'app.
   void applyPeriodBoosters().catch(error => console.warn('Boosters non calculés', error));
+  void Promise.all([settleDailyPoints(), applyMonthlyInterest()]).catch(error => console.warn('Épargne/intérêts non calculés', error));
 
   // Les seuils viennent de Supabase, par famille. En cas de réseau indisponible,
   // les valeurs historiques de cinematics.js restent utilisées.

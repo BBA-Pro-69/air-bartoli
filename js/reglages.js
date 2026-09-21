@@ -7,16 +7,18 @@ import * as api from './api.js';
 import { el, toast, fail, modal, personLabel, openPhotoCropper, avatar } from './ui.js';
 
 let root = null;
-let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], parents = [], famille = null, currentTheme = 'categories';
+let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], parents = [], savingsSettings = null, balances = [], famille = null, currentTheme = 'categories';
 const ETALON = 22;                      // points par semaine et par enfant
 
 const subs  = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
 
 async function reload() {
-  [children, cats, rewards, special, boosters, cinematic, contexts, parents] = await Promise.all([
+  [children, cats, rewards, special, boosters, cinematic, contexts, parents, savingsSettings, balances] = await Promise.all([
     api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(),
-    api.getBoosterSettings(), api.getCinematicSettings(), api.getContexts().catch(() => []), api.getParents().catch(() => [])]);
+    api.getBoosterSettings(), api.getCinematicSettings(), api.getContexts().catch(() => []), api.getParents().catch(() => []),
+    api.getSavingsSettings().catch(() => ({ annual_interest_rate: 12.00, active: true })),
+    api.getBalances().catch(() => [])]);
   render();
 }
 
@@ -172,6 +174,7 @@ function render() {
   // --- boutons de sélection thématiques (style Analyse, pas de débordement)
   const themes = [
     { id: 'categories', label: 'Catégories & barème' },
+    { id: 'savings',    label: '🐷 Épargne & Tirelire' },
     { id: 'photos',     label: '📷 Gestion des photos' },
     { id: 'boosters',   label: 'Boosters' },
     { id: 'rewards',    label: 'Récompenses' },
@@ -184,16 +187,140 @@ function render() {
       onclick: () => { currentTheme = t.id; render(); }
     }, t.label))));
 
+
+function renderSavingsSection(app) {
+  // 1. Carte Taux d'intérêt annuel de la Tirelire Magique
+  const rateInput = el('input', {
+    type: 'number', step: '0.5', min: '0', max: '100',
+    value: String(savingsSettings?.annual_interest_rate ?? 12.00)
+  });
+
+  const previewBox = el('div', { class: 'card', style: 'background:#fdf4ff;border-color:#f5d0fe;margin-top:12px' });
+  const updatePreview = () => {
+    const annual = Number(rateInput.value) || 0;
+    const monthly = (annual / 12).toFixed(2);
+    previewBox.innerHTML = '';
+    previewBox.append(
+      el('h3', { style: 'color:#a21caf;margin-top:0' }, 'Explication pédagogique en direct'),
+      el('p', { style: 'margin:0 0 6px;font-size:.9rem' },
+        'Un taux de ', el('strong', {}, annual + ' % par an'), ' équivaut à environ ',
+        el('strong', {}, monthly + ' % par mois'), ' crédités le 1er jour du mois suivant.'),
+      el('ul', { style: 'margin:0;padding-left:20px;font-size:.85rem;color:#701a75' },
+        el('li', {}, 'Pour 50 points en Tirelire : +' + Math.round(50 * (annual / 100 / 12)) + ' point / mois'),
+        el('li', {}, 'Pour 100 points en Tirelire : +' + Math.round(100 * (annual / 100 / 12)) + ' point(s) / mois'),
+        el('li', {}, 'Pour 200 points en Tirelire : +' + Math.round(200 * (annual / 100 / 12)) + ' point(s) / mois'))
+    );
+  };
+  rateInput.addEventListener('input', updatePreview);
+  updatePreview();
+
+  const rateCard = el('div', { class: 'card' },
+    el('h2', {}, 'Taux d’intérêt de la Tirelire Magique (Famille)'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'L’argent placé sur la Tirelire Magique fait des petits. À la fin de chaque mois, les intérêts sont calculés et versés sur la tirelire.'),
+    el('div', { class: 'fields' }, champ('Taux d’intérêt annuel (% / an)', rateInput)),
+    previewBox,
+    el('div', { class: 'row', style: 'margin-top:14px;gap:10px' },
+      el('button', {
+        class: 'btn btn-primary btn-sm',
+        onclick: async () => {
+          try {
+            const annual = Number(rateInput.value);
+            if (isNaN(annual) || annual < 0 || annual > 100) throw new Error('Taux invalide (0 à 100 %).');
+            await api.save('savings_settings', {
+              family_id: famille, annual_interest_rate: annual, active: true, updated_at: new Date().toISOString()
+            });
+            savingsSettings = { family_id: famille, annual_interest_rate: annual, active: true };
+            toast('Taux d’intérêt de la Tirelire enregistré !');
+            await reload();
+          } catch (e) { fail(e); }
+        }
+      }, 'Enregistrer le taux'),
+      el('button', {
+        class: 'btn btn-sm',
+        onclick: async () => {
+          try {
+            toast('Vérification des intérêts en cours…');
+            const count = await api.applyMonthlyInterest();
+            toast(count > 0 ? (count + ' versement(s) d’intérêts effectué(s) ! Bon vol.') : 'Tous les intérêts du mois écoulé sont déjà versés.');
+            await reload();
+          } catch (e) { fail(e); }
+        }
+      }, '🔄 Vérifier / Verser les intérêts maintenant'))
+  );
+  app.append(rateCard);
+
+  // 2. Répartition par enfant
+  const kidsCard = el('div', { class: 'card' },
+    el('h2', {}, 'Répartition des points par enfant'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Pendant la journée, les points sont virtuels. À minuit, les points nets de la journée basculent en vrais points ventilés entre Portefeuille et Tirelire Magique.'),
+    el('div', { style: 'display:grid;gap:14px' },
+      ...children.map(c => {
+        const bo = balances.find(x => x.child_id === c.id) || {};
+        const curPct = c.savings_pct ?? 30;
+        const slider = el('input', {
+          type: 'range', min: '0', max: '100', step: '5', value: String(curPct),
+          style: 'width:100%;cursor:pointer'
+        });
+        const pctLabel = el('strong', { style: 'font-size:1.1rem;color:#a21caf' }, curPct + ' %');
+        const detailP = el('p', { class: 'muted', style: 'font-size:.82rem;margin:4px 0 0' });
+
+        const updateChildDesc = () => {
+          const sPct = Number(slider.value);
+          const wPct = 100 - sPct;
+          pctLabel.textContent = sPct + ' %';
+          detailP.textContent = 'Chaque fin de journée : ' + wPct + ' % dans le Portefeuille 👛 et ' + sPct + ' % dans la Tirelire Magique 🐷✨.';
+        };
+        slider.addEventListener('input', updateChildDesc);
+        updateChildDesc();
+
+        return el('div', { style: 'border:1px solid var(--line);border-radius:14px;padding:14px;background:#fff' },
+          el('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px' },
+            el('div', { style: 'display:flex;align-items:center;gap:10px' },
+              avatar(c.first_name, { size: 'sm', customSrc: c.avatar, title: c.first_name }),
+              el('strong', { style: 'font-size:1.05rem' }, c.first_name)),
+            el('div', { style: 'display:flex;gap:6px;font-size:.78rem;font-weight:700' },
+              el('span', { style: 'background:#f0f9ff;color:var(--cyan-d);padding:2px 8px;border-radius:6px;border:1px solid #bae6fd' }, '👛 ' + (bo.wallet_balance ?? 0) + ' pts'),
+              el('span', { style: 'background:#fdf4ff;color:#a21caf;padding:2px 8px;border-radius:6px;border:1px solid #f5d0fe' }, '🐷 ' + (bo.savings_balance ?? 0) + ' pts'))),
+          el('div', { style: 'margin:10px 0 6px' },
+            el('div', { style: 'display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px' },
+              el('span', {}, 'Part Tirelire Magique :'),
+              pctLabel),
+            slider,
+            detailP),
+          el('button', {
+            class: 'btn btn-primary btn-sm', style: 'margin-top:10px',
+            onclick: async () => {
+              try {
+                const sPct = Number(slider.value);
+                await api.save('children', {
+                  id: c.id, family_id: famille, first_name: c.first_name,
+                  birth_date: c.birth_date, weekly_goal: c.weekly_goal,
+                  savings_pct: sPct, color: c.color, active: true, sort_order: c.sort_order
+                });
+                c.savings_pct = sPct;
+                toast('Répartition de ' + c.first_name + ' enregistrée !');
+                await reload();
+              } catch (e) { fail(e); }
+            }
+          }, 'Enregistrer la répartition pour ' + c.first_name));
+      }))
+  );
+  app.append(kidsCard);
+}
+
   if (currentTheme === 'categories') {
     // --- enfants
     app.append(el('div', { class: 'card' },
       el('h2', {}, 'Enfants'),
       el('table', { class: 'responsive' },
         el('thead', {}, el('tr', {}, el('th', {}, 'Prénom'), el('th', {}, 'Naissance'),
-          el('th', {}, 'Objectif hebdo'), el('th', {}, 'Couleur'), el('th', {}, ''))),
+          el('th', {}, 'Objectif hebdo'), el('th', {}, 'Part Tirelire'), el('th', {}, 'Couleur'), el('th', {}, ''))),
         el('tbody', {}, ...children.map(c => {
           const b = el('input', { type: 'date', value: c.birth_date || '' });
           const g = el('input', { type: 'number', min: '5', max: '60', value: String(c.weekly_goal) });
+          const sav = el('input', { type: 'number', min: '0', max: '100', value: String(c.savings_pct ?? 30), style: 'width:70px' });
           const col = el('input', { type: 'color', value: c.color, style: 'padding:2px;height:44px' });
           return el('tr', {},
             el('td', { 'data-th': 'Photo' },
@@ -220,12 +347,13 @@ function render() {
                 el('span', {}, c.first_name))),
             el('td', { 'data-th': 'Naissance' }, b),
             el('td', { 'data-th': 'Objectif' }, g),
+            el('td', { 'data-th': 'Part Tirelire' }, el('div', { style: 'display:flex;align-items:center;gap:4px' }, sav, el('span', { class: 'muted' }, '%'))),
             el('td', { 'data-th': 'Couleur' }, col),
             el('td', { 'data-th': '' }, el('button', {
               class: 'btn btn-sm btn-primary', onclick: async () => {
                 try {
                   await api.save('children', { id: c.id, family_id: famille, first_name: c.first_name,
-                    birth_date: b.value || null, weekly_goal: Number(g.value), color: col.value,
+                    birth_date: b.value || null, weekly_goal: Number(g.value), savings_pct: Number(sav.value), color: col.value,
                     active: true, sort_order: c.sort_order });
                   await reload(); toast('Enregistré.');
                 } catch (e) { fail(e); }
@@ -257,6 +385,8 @@ function render() {
     });
     app.append(catBox);
 
+  } else if (currentTheme === 'savings') {
+    renderSavingsSection(app);
   } else if (currentTheme === 'photos') {
     // --- réglage interactif en direct des dimensions des photos
     const currentSaisiePx = parseInt(localStorage.getItem('air_avatar_size_saisie') || '76', 10);

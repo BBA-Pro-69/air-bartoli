@@ -49,6 +49,7 @@ function renderGlobalScores() {
   if (!box) return;
   box.innerHTML = '';
   state.children.forEach(c => {
+    const b = state.balances.find(x => x.child_id === c.id) || {};
     box.append(el('button', {
       class: 'kid kid-centered' + (state.child === c.id ? ' on' : ''),
       style: `--kid:${c.color}`,
@@ -58,7 +59,12 @@ function renderGlobalScores() {
         avatar(c.first_name, { size: 'xl', customSrc: c.avatar, title: c.first_name })),
       el('strong', { style: 'font-size:1.15rem;font-weight:800;color:var(--navy);margin-top:2px' }, c.first_name),
       el('div', { class: 'kid-balance', style: `color:${c.color};margin:2px 0 0;font-size:2.4rem;line-height:1;font-weight:900` }, String(bal(c.id))),
-      el('span', { class: 'muted', style: 'font-size:.82rem;font-weight:600' }, 'points')));
+      el('span', { class: 'muted', style: 'font-size:.82rem;font-weight:600' }, 'points acquis'),
+      el('div', { class: 'kid-wallets-breakdown', style: 'display:flex;justify-content:center;gap:6px;margin-top:6px;font-size:.76rem;font-weight:700' },
+        el('span', { title: 'Portefeuille (dépenses du quotidien)', style: 'background:#f0f9ff;color:var(--cyan-d);padding:3px 7px;border-radius:8px;border:1px solid #bae6fd' },
+          '👛 ' + (b.wallet_balance ?? bal(c.id))),
+        el('span', { title: 'Tirelire Magique (épargne avec intérêts)', style: 'background:#fdf4ff;color:#a21caf;padding:3px 7px;border-radius:8px;border:1px solid #f5d0fe' },
+          '🐷 ' + (b.savings_balance ?? 0))))));
   });
 }
 
