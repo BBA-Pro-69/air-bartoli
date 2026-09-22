@@ -54,10 +54,25 @@ export const dayPartLabel = c =>
 // ---------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------
-export async function signIn(prenom, password) {
-  const p = PARENTS.find(x => x.prenom === prenom);
-  if (!p) throw new Error('Parent inconnu.');
-  const { error } = await sb.auth.signInWithPassword({ email: p.email, password });
+export const getCrewLoginProfiles = () =>
+  sb.rpc('get_crew_login_profiles').then(r => r.data || []);
+
+export async function signIn(target, password) {
+  let email = null;
+  if (typeof target === 'string' && target.includes('@')) {
+    email = target.trim();
+  } else {
+    const found = PARENTS.find(x => x.prenom === target || x.email === target);
+    if (found) {
+      email = found.email;
+    } else {
+      const profiles = await getCrewLoginProfiles().catch(() => []);
+      const match = profiles.find(p => p.display_name === target || p.email === target || p.user_id === target);
+      if (match) email = match.email;
+    }
+  }
+  if (!email) throw new Error('Profil ou adresse email introuvable.');
+  const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw error;
 }
 export async function signOut() {

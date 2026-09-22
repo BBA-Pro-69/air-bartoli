@@ -8,27 +8,27 @@
 <title>Connexion · Air Bartoli</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="manifest" href="./manifest.webmanifest?v=2026-09-19ff">
-<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-180.png?v=2026-09-19ff">
-<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png?v=2026-09-19ff">
+<link rel="manifest" href="./manifest.webmanifest?v=2026-09-23c">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-180.png?v=2026-09-23c">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png?v=2026-09-23c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Keyrilès">
-<link rel="stylesheet" href="css/app.css?v=2026-09-19ff">
-<link rel="stylesheet" href="css/avatars.css?v=2026-09-19ff">
+<link rel="stylesheet" href="css/app.css?v=2026-09-23c">
+<link rel="stylesheet" href="css/avatars.css?v=2026-09-23c">
 </head>
 <body class="login">
-<form class="login-box" id="form">
+<form class="login-box" id="form" style="max-width:400px">
   <div class="login-title">
     <span class="brand-mark" style="background:#00A7E1;color:#fff">✈</span>
     <h1 style="margin:0">Air Bartoli</h1>
   </div>
-  <p class="muted">Programme Keyrilès. Réservé à l'équipage.</p>
-  <!-- Deux boutons plutot qu'un champ e-mail : plus rapide sur telephone,
-       et Chrome ne melange plus les mots de passe des autres applications
-       hebergees sur la meme origine. -->
+  <p class="muted">Programme Keyrilès. Espace réservé à l’équipage.</p>
+
+  <label style="font-size:.82rem;font-weight:700;color:var(--navy);margin-bottom:6px;display:block">Choisir un profil :</label>
   <div class="who" id="who"></div>
+
   <div class="field">
     <label for="pwd">Mot de passe</label>
     <input id="pwd" type="password" autocomplete="current-password" required>
@@ -36,6 +36,6 @@
   <button class="btn btn-primary" style="width:100%" id="go">Embarquer</button>
   <p class="muted" id="msg" style="margin:12px 0 0;color:#dc2626"></p>
 </form>
-<script type="module" src="js/login.js"></script>
+<script type="module" src="js/login.js?v=2026-09-23c"></script>
 </body>
 </html>
