@@ -8,13 +8,14 @@
 //  5. ⚙️ Système (Cinématiques, dimensions des photos enfant, PWA)
 // =====================================================================
 import * as api from './api.js';
-import { el, toast, fail, modal, openPhotoCropper, avatar } from './ui.js';
+import { el, pts, toast, fail, modal, undoBar, openPhotoCropper, avatar } from './ui.js';
 
 let root = null;
 let children = [], allChildren = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], parents = [], savingsSettings = null, balances = [], rewardRedemptions = [];
 let famille = null;
 let me = null;
 let currentTheme = 'crew'; // 'crew' | 'savings' | 'categories' | 'rewards' | 'system'
+let rewardFilter = 'all'; // 'all' | 'individual' | 'collective'
 
 async function reload() {
   const [allC, ct, rw, sp, bst, cin, ctx, pr, sav, bal, rRed] = await Promise.all([
@@ -26,7 +27,7 @@ async function reload() {
     api.getCinematicSettings(),
     api.getContexts().catch(() => []),
     api.getParents().catch(() => []),
-    api.getSavingsSettings().catch(() => ({ annual_interest_rate: 100.00, active: true })),
+    api.getSavingsSettings().catch(() => ({ annual_interest_rate: 100.00, default_savings_pct: 70, active: true })),
     api.getBalances().catch(() => []),
     api.getRewardRedemptions().catch(() => [])
   ]);
@@ -51,6 +52,158 @@ function champ(label, input) {
 
 const subs = id => cats.filter(c => c.parent_id === id);
 const roots = () => cats.filter(c => !c.parent_id);
+
+// ---------------------------------------------------------------------
+// FORMULAIRE CATÉGORIES
+// ---------------------------------------------------------------------
+function formCategorie(cat, parentId) {
+  const isSub = !!(cat ? cat.parent_id : parentId);
+  const label = el('input', { type: 'text', value: cat?.label || '', required: true });
+  const kind = el('select', {},
+    ...[['bonus', 'Bonus, on gagne des points'],
+        ['malus', 'Malus, on en perd'],
+        ['both', 'Les deux (catégorie chapeau)']]
+      .map(([v, t]) => el('option', { value: v, selected: (cat?.kind || (isSub ? 'bonus' : 'both')) === v }, t)));
+  const points = el('input', { type: 'number', min: '0', max: '50', value: String(cat?.default_points ?? 2) });
+  const maxDay = el('input', { type: 'number', min: '1', max: '10', value: cat?.max_per_day ?? '', placeholder: 'illimité' });
+  const rep = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: cat?.repairable || false });
+
+  const body = el('div', {},
+    champ('Libellé', label),
+    el('div', { class: 'fields' },
+      champ('Sens', kind),
+      champ('Points par défaut', points),
+      champ('Maximum par jour', maxDay)),
+    el('label', { class: 'row', style: 'gap:8px;cursor:pointer' }, rep,
+      el('span', { style: 'font-weight:400;color:var(--ink)' },
+        'Réparable : l’enfant peut récupérer la moitié en réparant')),
+    el('p', { class: 'muted' },
+      'Le barème ne change que pour les saisies à venir. Les points déjà donnés ne bougent pas.'));
+
+  const actions = [{
+    label: 'Enregistrer', class: 'btn-primary',
+    onClick: async close => {
+      try {
+        const row = {
+          family_id: famille, parent_id: cat ? cat.parent_id : (parentId || null),
+          label: label.value.trim(), kind: kind.value,
+          default_points: Number(points.value),
+          max_per_day: maxDay.value === '' ? null : Number(maxDay.value),
+          repairable: rep.checked, active: cat?.active ?? true,
+          sort_order: cat?.sort_order ?? 99
+        };
+        if (cat) row.id = cat.id;
+        await api.save('categories', row);
+        close(); await reload(); toast('Catégorie enregistrée.');
+      } catch (e) { fail(e); }
+    }
+  }];
+
+  if (cat) {
+    actions.push({
+      label: 'Supprimer', class: 'btn-danger',
+      onClick: async close => {
+        const hasChildren = !cat.parent_id && subs(cat.id).length > 0;
+        const cible = hasChildren ? 'cette catégorie et toutes ses sous-catégories' : 'cette catégorie';
+        if (!window.confirm('Supprimer ' + cible + ' ?\n\nSi elle apparaît déjà dans l’historique, elle sera retirée des menus mais l’historique sera conservé.')) return;
+        try {
+          const mode = await api.deleteCategory(cat.id);
+          close(); await reload();
+          toast(mode === 'archived' ? 'Catégorie retirée des menus. Historique conservé.' : 'Catégorie supprimée.');
+        } catch (e) { fail(e); }
+      }
+    });
+  }
+  modal(cat ? 'Modifier la catégorie' : 'Nouvelle catégorie', body, actions);
+}
+
+// ---------------------------------------------------------------------
+// FORMULAIRE RÉCOMPENSES
+// ---------------------------------------------------------------------
+function formRecompense(r) {
+  const label = el('input', { type: 'text', value: r?.label || '', required: true });
+  const scope = el('select', {}, ...[['individual', 'Individuelle (Portefeuille 👛)'], ['collective', 'Collective (Tirelire Magique 🐷)']]
+    .map(([v, t]) => el('option', { value: v, selected: (r?.scope || 'individual') === v }, t)));
+  const cost = el('input', { type: 'number', min: '1', value: String(r?.cost ?? 20) });
+  const minPc = el('input', { type: 'number', min: '0', value: String(r?.min_per_child ?? 0) });
+  const desc = el('input', { type: 'text', value: r?.description || '' });
+  const jauge = el('p', { class: 'muted' });
+
+  // Calcul dynamique de l'attente en semaines
+  const calibrer = () => {
+    const c = Number(cost.value) || 0;
+    const isCollective = scope.value === 'collective';
+    const activeKids = children.filter(k => k.active !== false);
+    const meanGoal = activeKids.length ? (activeKids.reduce((s, k) => s + (k.weekly_goal || 42), 0) / activeKids.length) : 42;
+    const meanSavingsPct = activeKids.length ? (activeKids.reduce((s, k) => s + (k.savings_pct ?? 70), 0) / activeKids.length) : 70;
+
+    let fluxHebdo = 0;
+    let descFlux = '';
+    if (isCollective) {
+      fluxHebdo = activeKids.reduce((s, k) => s + ((k.weekly_goal || 42) * ((k.savings_pct ?? 70) / 100.0)), 0);
+      descFlux = 'pour la fratrie (~' + Math.round(fluxHebdo * 10) / 10 + ' pts/semaine en Tirelire)';
+    } else {
+      fluxHebdo = meanGoal * (1 - (meanSavingsPct / 100.0));
+      descFlux = 'par enfant (~' + Math.round(fluxHebdo * 10) / 10 + ' pts/semaine en Portefeuille)';
+    }
+
+    const s = fluxHebdo > 0 ? (Math.round((c / fluxHebdo) * 10) / 10) : 0;
+    jauge.textContent = 'Environ ' + s + ' semaine' + (s > 1 ? 's' : '') + ' d’attente ' + descFlux + '.' +
+      (s > 20 ? ' ⚠ Au-delà de 20 semaines, un enfant de 5 à 7 ans se décourage.' : '');
+    jauge.style.color = s > 20 ? 'var(--red)' : 'var(--muted)';
+  };
+  cost.addEventListener('input', calibrer);
+  scope.addEventListener('change', calibrer);
+  calibrer();
+
+  let currentImgUrl = r?.image_url || null;
+  const imgPreview = el('div', { style: 'margin-bottom:12px;display:flex;align-items:center;gap:12px' },
+    currentImgUrl ? el('img', { src: currentImgUrl, style: 'width:80px;height:45px;border-radius:10px;object-fit:cover;border:1px solid var(--line)' }) : null,
+    el('button', {
+      type: 'button', class: 'btn btn-sm',
+      onclick: () => {
+        openPhotoCropper({
+          title: 'Photo de la récompense (16:9)',
+          isCircle: false, aspectRatio: 16 / 9,
+          existingSrc: currentImgUrl,
+          onSave: async blob => {
+            const url = await api.uploadMedia(blob, 'reward');
+            currentImgUrl = url;
+            toast('Photo importée !');
+            imgPreview.innerHTML = '';
+            imgPreview.append(
+              el('img', { src: url, style: 'width:80px;height:45px;border-radius:10px;object-fit:cover;border:1px solid var(--line)' }),
+              el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Photo prête'));
+          }
+        });
+      }
+    }, currentImgUrl ? 'Changer la photo' : '📷 Ajouter une photo'));
+
+  const body = el('div', {},
+    imgPreview,
+    champ('Libellé', label),
+    el('div', { class: 'fields' }, champ('Type de récompense', scope), champ('Prix en points', cost),
+      champ('Minimum par enfant (collectif)', minPc)),
+    champ('Description', desc),
+    jauge);
+
+  modal(r ? 'Modifier la récompense' : 'Nouvelle récompense', body, [{
+    label: 'Enregistrer', class: 'btn-primary',
+    onClick: async close => {
+      try {
+        const row = {
+          family_id: famille, label: label.value.trim(), scope: scope.value,
+          cost: Number(cost.value), min_per_child: Number(minPc.value),
+          description: desc.value, active: r?.active ?? true, sort_order: r?.sort_order ?? 99,
+          image_url: currentImgUrl
+        };
+        if (r) row.id = r.id;
+        await api.save('rewards', row);
+        close(); await reload(); toast('Récompense enregistrée.');
+      } catch (e) { fail(e); }
+    }
+  }]);
+}
 
 // ---------------------------------------------------------------------
 // 1. ONGLET 1 : ÉQUIPAGE & FAMILLE
@@ -326,7 +479,7 @@ function openAddCrewModal() {
 // 2. ONGLET 2 : PORTEFEUILLE & TIRELIRE
 // ---------------------------------------------------------------------
 function renderSavingsSection(app) {
-  // 1. Paramétrage des intérêts
+  // 1. Taux d'intérêt annuel
   const rateInput = el('input', {
     type: 'number', step: '5', min: '0', max: '200',
     value: String(savingsSettings?.annual_interest_rate ?? 100.00)
@@ -388,13 +541,13 @@ function renderSavingsSection(app) {
   );
   app.append(rateCard);
 
-  // 2. Réglage global pour toute la fratrie
-  const globalPct = 70;
+  // 2. Réglage global pour toute la fratrie (persisté dans savings_settings et localStorage)
+  const savedGlobalPct = savingsSettings?.default_savings_pct ?? Number(localStorage.getItem('ab_global_savings_pct') || '70');
   const globalSlider = el('input', {
-    type: 'range', min: '0', max: '100', step: '5', value: String(globalPct),
+    type: 'range', min: '0', max: '100', step: '5', value: String(savedGlobalPct),
     style: 'width:100%;cursor:pointer'
   });
-  const globalLabel = el('strong', { style: 'font-size:1.15rem;color:#a21caf' }, globalPct + ' %');
+  const globalLabel = el('strong', { style: 'font-size:1.15rem;color:#a21caf' }, savedGlobalPct + ' %');
   const globalDesc = el('p', { class: 'muted', style: 'font-size:.85rem;margin:4px 0 10px' });
 
   const updateGlobalDesc = () => {
@@ -408,7 +561,7 @@ function renderSavingsSection(app) {
 
   const globalCard = el('div', { class: 'card', style: 'background:#faf5ff;border-color:#e9d5ff' },
     el('h2', { style: 'color:#6b21a8' }, '⚡ Réglage global pour toute la fratrie'),
-    el('p', { class: 'muted', style: 'margin-top:-6px' }, 'Permet de définir en un seul clic la même clé de répartition pour tous les enfants.'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' }, 'Définit en un seul clic la clé de répartition par défaut pour tous les enfants.'),
     el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px' },
       el('span', { style: 'font-weight:700' }, 'Part Tirelire Magique commune :'),
       globalLabel),
@@ -419,6 +572,12 @@ function renderSavingsSection(app) {
       onclick: async () => {
         try {
           const sPct = Number(globalSlider.value);
+          localStorage.setItem('ab_global_savings_pct', String(sPct));
+          await api.save('savings_settings', {
+            family_id: famille, default_savings_pct: sPct,
+            annual_interest_rate: savingsSettings?.annual_interest_rate ?? 100.0,
+            active: true, updated_at: new Date().toISOString()
+          });
           await Promise.all(children.map(c =>
             api.save('children', {
               id: c.id, family_id: famille, first_name: c.first_name,
@@ -426,7 +585,7 @@ function renderSavingsSection(app) {
               savings_pct: sPct, color: c.color, active: true, sort_order: c.sort_order
             })
           ));
-          toast('Répartition globale appliquée à tous les enfants (' + sPct + ' % Tirelire) !');
+          toast('Répartition appliquée à tous les enfants (' + sPct + ' % Tirelire Magique) !');
           await reload();
         } catch (e) { fail(e); }
       }
@@ -497,7 +656,6 @@ function renderSavingsSection(app) {
 // 3. ONGLET 3 : BARÈME & BOOSTER
 // ---------------------------------------------------------------------
 function renderBaremeSection(app) {
-  // Boosters calendaires
   const weekBooster = boosters.find(b => b.period_type === 'week');
   const monthBooster = boosters.find(b => b.period_type === 'month');
 
@@ -516,7 +674,7 @@ function renderBaremeSection(app) {
       el('div', { class: 'spacer' }),
       el('button', { class: 'btn btn-sm btn-primary', onclick: () => formCategorie(null, null) }, '+ Grande catégorie')),
     el('p', { class: 'muted', style: 'margin-top:4px' },
-      'Étalon de référence recommandé : 3 points par jour avec école (~12 pts/semaine), 10 points par jour sans école (~30 pts/week-end), soit un total de 42 points par semaine.'));
+      'Étalon de référence : 3 points par jour avec école (~12 pts/semaine), 10 points par jour sans école (~30 pts/week-end), soit un total de 42 points par semaine.'));
 
   roots().forEach(r => {
     catBox.append(el('div', { style: 'margin-top:16px;padding-top:12px;border-top:1px solid var(--line)' },
@@ -528,7 +686,8 @@ function renderBaremeSection(app) {
       el('div', { class: 'tiles', style: 'margin-top:10px' },
         ...subs(r.id).map(s => el('button', {
           class: 'tile ' + (s.kind === 'malus' ? 'tile-malus' : 'tile-bonus'),
-          style: s.active ? '' : 'opacity:.45', onclick: () => formCategorie(s)
+          style: s.active ? '' : 'opacity:.45',
+          onclick: () => formCategorie(s)
         },
           el('span', { class: 'tile-label' }, s.label),
           el('span', { class: 'tile-pts' },
@@ -574,35 +733,53 @@ function boosterForm(periodType, title, desc, maxDays, current) {
 }
 
 // ---------------------------------------------------------------------
-// 4. ONGLET 4 : RÉCOMPENSES
+// 4. ONGLET 4 : RÉCOMPENSES (ÉPURÉ & DESIGN UX)
 // ---------------------------------------------------------------------
 function renderRewardsSection(app) {
   const activeKids = children.filter(k => k.active !== false);
   const meanGoal = activeKids.length ? (activeKids.reduce((s, k) => s + (k.weekly_goal || 42), 0) / activeKids.length) : 42;
   const meanSavingsPct = activeKids.length ? (activeKids.reduce((s, k) => s + (k.savings_pct ?? 70), 0) / activeKids.length) : 70;
 
-  // Calcul du flux portefeuille individuel (30% de 42 = ~12.6 pts/semaine)
   const fluxPortefeuille = meanGoal * (1 - (meanSavingsPct / 100.0));
-  // Calcul du flux tirelire collective pour toute la fratrie (70% de 84 = ~58.8 pts/semaine)
   const fluxTirelire = activeKids.reduce((s, k) => s + ((k.weekly_goal || 42) * ((k.savings_pct ?? 70) / 100.0)), 0);
 
+  const indRewards = rewards.filter(r => r.scope === 'individual');
+  const colRewards = rewards.filter(r => r.scope === 'collective');
+
+  const filteredRewards = rewards.filter(r => {
+    if (rewardFilter === 'individual') return r.scope === 'individual';
+    if (rewardFilter === 'collective') return r.scope === 'collective';
+    return true;
+  });
+
+  const filterBar = el('div', { class: 'chips', style: 'margin:10px 0 16px' },
+    el('button', {
+      class: 'chip' + (rewardFilter === 'all' ? ' on' : ''),
+      onclick: () => { rewardFilter = 'all'; render(); }
+    }, 'Toutes (' + rewards.length + ')'),
+    el('button', {
+      class: 'chip' + (rewardFilter === 'individual' ? ' on' : ''),
+      onclick: () => { rewardFilter = 'individual'; render(); }
+    }, 'Individuelles 👛 (' + indRewards.length + ')'),
+    el('button', {
+      class: 'chip' + (rewardFilter === 'collective' ? ' on' : ''),
+      onclick: () => { rewardFilter = 'collective'; render(); }
+    }, 'Collectives 🐷 (' + colRewards.length + ')'));
+
   app.append(el('div', { class: 'card' },
-    el('div', { class: 'row', style: 'margin-bottom:12px' },
-      el('h2', { style: 'margin:0' }, 'Catalogue des récompenses (' + rewards.length + ')'),
+    el('div', { class: 'row', style: 'margin-bottom:6px' },
+      el('h2', { style: 'margin:0' }, 'Catalogue des récompenses'),
       el('div', { class: 'spacer' }),
       el('button', { class: 'btn btn-sm btn-primary', onclick: () => formRecompense(null) }, '+ Nouvelle récompense')),
-    el('p', { class: 'muted', style: 'margin-top:-6px' },
-      'Les récompenses individuelles sont payées par le Portefeuille 👛. Les sorties collectives sont payées par la Tirelire Magique 🐷✨. Les temps d’attente sont calculés en direct selon les objectifs hebdomadaires réels des enfants.'),
-    el('div', { class: 'rewards', style: 'margin-top:14px' },
-      ...rewards.map(r => {
+    filterBar,
+    el('div', { class: 'rewards', style: 'display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))' },
+      ...filteredRewards.map(r => {
         const isCollective = r.scope === 'collective';
         const flux = isCollective ? fluxTirelire : fluxPortefeuille;
         const semaines = flux > 0 ? (Math.round((r.cost / flux) * 10) / 10) : 0;
-        const descTemps = isCollective
-          ? '~' + semaines + ' semaine' + (semaines > 1 ? 's' : '') + ' pour la fratrie'
-          : '~' + semaines + ' semaine' + (semaines > 1 ? 's' : '') + ' par enfant';
+        const descTemps = '~' + semaines + ' sem.';
 
-        // Historique des attributions de cette récompense
+        // Historique des attributions
         const historyList = rewardRedemptions.filter(e => {
           const mId = e.redemptions?.reward_id === r.id;
           const mNote = e.note && e.note.includes(r.label);
@@ -610,36 +787,56 @@ function renderRewardsSection(app) {
         });
         const distCount = historyList.length;
 
-        return el('div', { class: 'reward' },
-          r.image_url ? el('img', { src: r.image_url, class: 'reward-img' }) : null,
-          el('div', { class: 'reward-top' },
+        const card = el('div', {
+          class: 'reward',
+          style: 'padding:14px;border:1px solid var(--line);border-radius:14px;background:#fff;cursor:pointer;transition:transform .1s,box-shadow .1s',
+          onclick: () => openRewardHistoryModal(r, historyList)
+        },
+          r.image_url ? el('img', {
+            src: r.image_url,
+            style: 'width:100%;height:140px;border-radius:10px;object-fit:cover;margin-bottom:10px;border:1px solid var(--line)'
+          }) : null,
+          el('div', { style: 'display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px' },
             el('div', {},
-              el('strong', {}, r.label),
-              el('div', { style: 'font-size:.74rem;font-weight:700;margin-top:2px;color:' + (isCollective ? '#a21caf' : 'var(--cyan-d)') },
-                isCollective ? '🐷 Tirelire Magique (Collectif)' : '👛 Portefeuille (Individuel)')),
-            el('span', { class: 'reward-cost' }, r.cost + ' pts')),
-          el('div', { style: 'margin:8px 0;display:flex;flex-direction:column;gap:3px;font-size:.82rem' },
-            el('div', { style: 'font-weight:600;color:var(--navy)' }, '⏳ ' + descTemps),
-            el('div', { class: 'muted' },
-              isCollective ? 'Minimum : ' + r.min_per_child + ' pts par enfant' : 'Dépense libre sur le portefeuille personnel'),
-            el('div', { style: 'font-weight:700;color:var(--ink);margin-top:2px' },
-              distCount > 0 ? ('🎁 Distribuée ' + distCount + ' fois') : '🎁 Pas encore attribuée')),
-          el('div', { class: 'row', style: 'margin-top:10px;gap:6px' },
+              el('strong', { style: 'font-size:1.05rem;display:block;line-height:1.25' }, r.label),
+              el('span', {
+                class: 'badge',
+                style: isCollective ? 'background:#fdf4ff;color:#a21caf;font-size:.72rem;margin-top:3px' : 'background:#f0f9ff;color:var(--cyan-d);font-size:.72rem;margin-top:3px'
+              }, isCollective ? '🐷 Tirelire' : '👛 Portefeuille')),
+            el('span', { style: 'font-size:1.35rem;font-weight:900;color:var(--navy);white-space:nowrap' }, r.cost + ' pts')),
+          el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:.82rem' },
+            el('span', { class: 'muted', title: 'Temps moyen pour l’obtenir' }, '⏳ ' + descTemps),
+            el('span', {
+              style: 'font-weight:700;padding:2px 8px;border-radius:6px;background:#f8fafc;color:' + (distCount > 0 ? 'var(--cyan-d)' : 'var(--muted)')
+            }, '🎁 ' + distCount + 'x')),
+          el('div', { class: 'row', style: 'margin-top:10px;gap:8px', onclick: ev => ev.stopPropagation() },
             el('button', {
-              class: 'btn btn-sm btn-ghost',
-              style: 'border:1px solid var(--line);font-weight:600',
-              title: 'Voir l’historique des attributions',
-              onclick: () => openRewardHistoryModal(r, historyList)
-            }, '📜 Historique (' + distCount + ')'),
-            el('button', { class: 'btn btn-sm', onclick: () => formRecompense(r) }, 'Modifier'),
+              class: 'btn btn-sm', style: 'flex:1',
+              onclick: () => formRecompense(r)
+            }, 'Modifier'),
             el('button', {
               class: 'btn btn-sm btn-ghost', style: 'color:var(--red)',
+              title: 'Supprimer cette récompense',
               onclick: async () => {
-                if (!window.confirm('Supprimer ' + r.label + ' ?')) return;
-                await api.remove('rewards', r.id);
-                await reload(); toast('Récompense supprimée.');
+                if (!window.confirm('Supprimer la récompense « ' + r.label + ' » ?')) return;
+                try {
+                  const backupReward = { ...r };
+                  delete backupReward.id;
+                  await api.remove('rewards', r.id);
+                  await reload();
+                  toast('Récompense supprimée.');
+                  undoBar('Récompense « ' + r.label + ' » supprimée', async () => {
+                    try {
+                      await api.insert('rewards', backupReward);
+                      await reload();
+                      toast('Récompense restaurée !');
+                    } catch (err) { fail(err); }
+                  }, 10);
+                } catch (e) { fail(e); }
               }
             }, 'Supprimer')));
+
+        return card;
       }))
   ));
 }
@@ -647,7 +844,7 @@ function renderRewardsSection(app) {
 function openRewardHistoryModal(r, historyList) {
   const isCollective = r.scope === 'collective';
   const headerCard = el('div', { style: 'display:flex;align-items:center;gap:14px;padding:12px;background:#f8fafc;border-radius:12px;margin-bottom:14px' },
-    r.image_url ? el('img', { src: r.image_url, style: 'width:80px;height:45px;border-radius:8px;object-fit:cover' }) : null,
+    r.image_url ? el('img', { src: r.image_url, style: 'width:80px;height:45px;border-radius:8px;object-fit:cover;border:1px solid var(--line)' }) : null,
     el('div', {},
       el('strong', { style: 'font-size:1.1rem;display:block' }, r.label),
       el('span', { class: 'muted', style: 'font-size:.85rem' },
@@ -658,11 +855,10 @@ function openRewardHistoryModal(r, historyList) {
   const listContainer = el('div', { style: 'display:grid;gap:8px;max-height:60vh;overflow-y:auto' });
 
   if (historyList.length === 0) {
-    listContainer.append(el('p', { class: 'muted', style: 'text-align:center;padding:20px 0' }, 'Cette récompense n’a pas encore été attribuée.'));
+    listContainer.append(el('p', { class: 'muted', style: 'text-align:center;padding:24px 0' }, 'Cette récompense n’a pas encore été attribuée.'));
   } else {
     historyList.forEach(e => {
       const childName = e.children?.first_name || 'Enfant';
-      const childColor = e.children?.color || 'var(--cyan)';
       const childAvatar = e.children?.avatar || null;
       listContainer.append(el('div', { style: 'display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff' },
         el('div', { style: 'display:flex;align-items:center;gap:10px' },
