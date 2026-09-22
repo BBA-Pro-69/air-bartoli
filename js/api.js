@@ -160,6 +160,23 @@ export const createCrewMember = (email, password, displayName, roleTitle) =>
   rpc('create_crew_member', { p_email: email, p_password: password, p_display_name: displayName, p_role_title: roleTitle || 'Membre d’équipage' });
 export const removeCrewMember = (userId) =>
   rpc('remove_crew_member', { p_user_id: userId });
+export const getRewardRedemptions = () => rows(
+  sb.from('events')
+    .select('*, children(first_name, color, avatar), redemptions(reward_id, rewards(label, scope, cost))')
+    .eq('kind', 'reward')
+    .order('event_date', { ascending: false })
+    .order('created_at', { ascending: false })
+);
+
+export const updateCrewMember = (userId, displayName, roleTitle = null, avatarUrl = null, email = null) =>
+  rpc('update_crew_member', {
+    p_user_id: userId,
+    p_display_name: displayName,
+    p_role_title: roleTitle || null,
+    p_avatar_url: avatarUrl || null,
+    p_email: email || null
+  });
+
 export const archiveChild = (id) => update('children', id, { active: false });
 export const restoreChild = (id) => update('children', id, { active: true });
 
