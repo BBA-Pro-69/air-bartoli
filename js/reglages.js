@@ -1,41 +1,58 @@
 // =====================================================================
-//  Reglages. Tout est modifiable ici : enfants, categories, bareme,
-//  catalogue, jours speciaux. Rien n'est fige dans le code.
-//  Seule regle : changer un bareme n'affecte que l'avenir.
+//  Air Bartoli — Espace Réglages & Administration
+//  5 onglets clairs et structurés :
+//  1. 👨‍👩‍👧‍👦 Équipage & Famille (Enfants + Adultes / membres d'équipage)
+//  2. 👛 Portefeuille & Tirelire (Taux 100%/an, répartition, intérêts)
+//  3. 📋 Barème & Booster (Boosters de régularité + Catégories école/maison)
+//  4. 🎁 Récompenses (Catalogue avec temps d'attente corrélé aux objectifs)
+//  5. ⚙️ Système (Cinématiques, dimensions des photos, PWA)
 // =====================================================================
 import * as api from './api.js';
-import { el, toast, fail, modal, personLabel, openPhotoCropper, avatar } from './ui.js';
+import { el, toast, fail, modal, openPhotoCropper, avatar } from './ui.js';
 
 let root = null;
-let children = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], parents = [], savingsSettings = null, balances = [], famille = null, currentTheme = 'categories';
-const ETALON = 22;                      // points par semaine et par enfant
-
-const subs  = id => cats.filter(c => c.parent_id === id);
-const roots = () => cats.filter(c => !c.parent_id);
+let children = [], allChildren = [], cats = [], rewards = [], special = [], boosters = [], cinematic = null, contexts = [], parents = [], savingsSettings = null, balances = [];
+let famille = null;
+let currentTheme = 'crew'; // 'crew' | 'savings' | 'categories' | 'rewards' | 'system'
 
 async function reload() {
-  [children, cats, rewards, special, boosters, cinematic, contexts, parents, savingsSettings, balances] = await Promise.all([
-    api.getChildren(), api.getCategories(), api.getRewards(), api.getSpecialDays(),
-    api.getBoosterSettings(), api.getCinematicSettings(), api.getContexts().catch(() => []), api.getParents().catch(() => []),
-    api.getSavingsSettings().catch(() => ({ annual_interest_rate: 12.00, active: true })),
-    api.getBalances().catch(() => [])]);
+  [allChildren, cats, rewards, special, boosters, cinematic, contexts, parents, savingsSettings, balances] = await Promise.all([
+    api.getAllChildren().catch(() => api.getChildren()),
+    api.getCategories(),
+    api.getRewards(),
+    api.getSpecialDays(),
+    api.getBoosterSettings(),
+    api.getCinematicSettings(),
+    api.getContexts().catch(() => []),
+    api.getParents().catch(() => []),
+    api.getSavingsSettings().catch(() => ({ annual_interest_rate: 100.00, active: true })),
+    api.getBalances().catch(() => [])
+  ]);
+  children = allChildren.filter(c => c.active !== false);
   render();
 }
 
+function champ(label, input) {
+  return el('div', { class: 'field' }, el('label', {}, label), input);
+}
+
 // ---------------------------------------------------------------------
-function champ(label, input) { return el('div', { class: 'field' }, el('label', {}, label), input); }
+// FORMULAIRES CATÉGORIES & RÉCOMPENSES
+// ---------------------------------------------------------------------
+const subs = id => cats.filter(c => c.parent_id === id);
+const roots = () => cats.filter(c => !c.parent_id);
 
 function formCategorie(cat, parentId) {
   const isSub = !!(cat ? cat.parent_id : parentId);
   const label = el('input', { type: 'text', value: cat?.label || '', required: true });
-  const kind  = el('select', {},
+  const kind = el('select', {},
     ...[['bonus', 'Bonus, on gagne des points'],
         ['malus', 'Malus, on en perd'],
-        ['both',  'Les deux (catégorie chapeau)']]
+        ['both', 'Les deux (catégorie chapeau)']]
       .map(([v, t]) => el('option', { value: v, selected: (cat?.kind || (isSub ? 'bonus' : 'both')) === v }, t)));
   const points = el('input', { type: 'number', min: '0', max: '50', value: String(cat?.default_points ?? 2) });
   const maxDay = el('input', { type: 'number', min: '1', max: '10', value: cat?.max_per_day ?? '', placeholder: 'illimité' });
-  const rep    = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: cat?.repairable || false });
+  const rep = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: cat?.repairable || false });
 
   const body = el('div', {},
     champ('Libellé', label),
@@ -45,13 +62,9 @@ function formCategorie(cat, parentId) {
       champ('Maximum par jour', maxDay)),
     el('label', { class: 'row', style: 'gap:8px;cursor:pointer' }, rep,
       el('span', { style: 'font-weight:400;color:var(--ink)' },
-        'Réparable : l\'enfant peut récupérer la moitié en réparant')),
+        'Réparable : l’enfant peut récupérer la moitié en réparant')),
     el('p', { class: 'muted' },
       'Le barème ne change que pour les saisies à venir. Les points déjà donnés ne bougent pas.'));
-
-  // Une catégorie peut être supprimée depuis ce formulaire. Si elle a déjà
-  // servi, la base la retire des menus sans effacer le journal.
-
 
   const actions = [{
     label: 'Enregistrer', class: 'btn-primary',
@@ -71,44 +84,56 @@ function formCategorie(cat, parentId) {
       } catch (e) { fail(e); }
     }
   }];
-  if (cat) actions.push({
-    label: 'Supprimer', class: 'btn-danger',
-    onClick: async close => {
-      const hasChildren = !cat.parent_id && subs(cat.id).length > 0;
-      const cible = hasChildren ? 'cette catégorie et toutes ses sous-catégories' : 'cette catégorie';
-      if (!window.confirm('Supprimer ' + cible + ' ?\n\nSi elle apparaît déjà dans l’historique, elle sera retirée des menus mais l’historique sera conservé.')) return;
-      try {
-        const mode = await api.deleteCategory(cat.id);
-        close(); await reload();
-        toast(mode === 'archived'
-          ? 'Catégorie retirée des menus. Historique conservé.'
-          : 'Catégorie supprimée.');
-      } catch (e) { fail(e); }
-    }
-  });
+
+  if (cat) {
+    actions.push({
+      label: 'Supprimer', class: 'btn-danger',
+      onClick: async close => {
+        const hasChildren = !cat.parent_id && subs(cat.id).length > 0;
+        const cible = hasChildren ? 'cette catégorie et toutes ses sous-catégories' : 'cette catégorie';
+        if (!window.confirm('Supprimer ' + cible + ' ?\n\nSi elle apparaît déjà dans l’historique, elle sera retirée des menus mais l’historique sera conservé.')) return;
+        try {
+          const mode = await api.deleteCategory(cat.id);
+          close(); await reload();
+          toast(mode === 'archived' ? 'Catégorie retirée des menus. Historique conservé.' : 'Catégorie supprimée.');
+        } catch (e) { fail(e); }
+      }
+    });
+  }
   modal(cat ? 'Modifier la catégorie' : 'Nouvelle catégorie', body, actions);
 }
 
 function formRecompense(r) {
   const label = el('input', { type: 'text', value: r?.label || '', required: true });
-  const scope = el('select', {}, ...[['individual', 'Pour un seul enfant'], ['collective', 'Pour toute la fratrie']]
+  const scope = el('select', {}, ...[['individual', 'Pour toi (Portefeuille)'], ['collective', 'Ensemble (Tirelire Magique)']]
     .map(([v, t]) => el('option', { value: v, selected: (r?.scope || 'individual') === v }, t)));
-  const cost  = el('input', { type: 'number', min: '1', value: String(r?.cost ?? 60) });
+  const cost = el('input', { type: 'number', min: '1', value: String(r?.cost ?? 20) });
   const minPc = el('input', { type: 'number', min: '0', value: String(r?.min_per_child ?? 0) });
-  const desc  = el('input', { type: 'text', value: r?.description || '' });
+  const desc = el('input', { type: 'text', value: r?.description || '' });
   const jauge = el('p', { class: 'muted' });
 
-  // Le calcul de calibration, affiche en direct. C'est le garde-fou
-  // contre le cadeau a sept mois que personne n'atteindra jamais.
+  // Calcul dynamique de l'attente en semaines basé sur les objectifs réels des enfants
   const calibrer = () => {
     const c = Number(cost.value) || 0;
-    const semaines = scope.value === 'collective'
-      ? c / (ETALON * Math.max(1, children.length))
-      : c / ETALON;
-    const s = Math.round(semaines * 10) / 10;
-    jauge.textContent = 'Environ ' + s + ' semaine' + (s > 1 ? 's' : '') + ' d\'attente à ' + ETALON + ' points par semaine.' +
-      (s > 16 ? ' ⚠ Au-delà de 16 semaines, un enfant de 5 ans ne se projette plus : il se décourage.' : '');
-    jauge.style.color = s > 16 ? 'var(--red)' : 'var(--muted)';
+    const isCollective = scope.value === 'collective';
+    const activeKids = children.filter(k => k.active !== false);
+    const meanGoal = activeKids.length ? (activeKids.reduce((s, k) => s + (k.weekly_goal || 42), 0) / activeKids.length) : 42;
+    const meanSavingsPct = activeKids.length ? (activeKids.reduce((s, k) => s + (k.savings_pct ?? 70), 0) / activeKids.length) : 70;
+
+    let fluxHebdo = 0;
+    let descFlux = '';
+    if (isCollective) {
+      fluxHebdo = activeKids.reduce((s, k) => s + ((k.weekly_goal || 42) * ((k.savings_pct ?? 70) / 100.0)), 0);
+      descFlux = 'pour la fratrie (~' + Math.round(fluxHebdo * 10) / 10 + ' pts/semaine en Tirelire)';
+    } else {
+      fluxHebdo = meanGoal * (1 - (meanSavingsPct / 100.0));
+      descFlux = 'par enfant (~' + Math.round(fluxHebdo * 10) / 10 + ' pts/semaine en Portefeuille)';
+    }
+
+    const s = fluxHebdo > 0 ? (Math.round((c / fluxHebdo) * 10) / 10) : 0;
+    jauge.textContent = 'Environ ' + s + ' semaine' + (s > 1 ? 's' : '') + ' d’attente ' + descFlux + '.' +
+      (s > 20 ? ' ⚠ Au-delà de 20 semaines, un enfant de 5 à 7 ans se décourage.' : '');
+    jauge.style.color = s > 20 ? 'var(--red)' : 'var(--muted)';
   };
   cost.addEventListener('input', calibrer);
   scope.addEventListener('change', calibrer);
@@ -116,24 +141,21 @@ function formRecompense(r) {
 
   let currentImgUrl = r?.image_url || null;
   const imgPreview = el('div', { style: 'margin-bottom:12px;display:flex;align-items:center;gap:12px' },
-    currentImgUrl ? el('img', { src: currentImgUrl, style: 'width:60px;height:60px;border-radius:12px;object-fit:cover;border:1px solid var(--line)' }) : null,
+    currentImgUrl ? el('img', { src: currentImgUrl, style: 'width:80px;height:45px;border-radius:10px;object-fit:cover;border:1px solid var(--line)' }) : null,
     el('button', {
-      type: 'button',
-      class: 'btn btn-sm',
+      type: 'button', class: 'btn btn-sm',
       onclick: () => {
         openPhotoCropper({
-          title: 'Photo de la récompense',
-          isCircle: false,
-          aspectRatio: 16 / 9,
+          title: 'Photo de la récompense (16:9)',
+          isCircle: false, aspectRatio: 16 / 9,
           existingSrc: currentImgUrl,
           onSave: async blob => {
             const url = await api.uploadMedia(blob, 'reward');
             currentImgUrl = url;
             toast('Photo importée !');
-            // Mettre à jour l'aperçu
             imgPreview.innerHTML = '';
             imgPreview.append(
-              el('img', { src: url, style: 'width:60px;height:60px;border-radius:12px;object-fit:cover;border:1px solid var(--line)' }),
+              el('img', { src: url, style: 'width:80px;height:45px;border-radius:10px;object-fit:cover;border:1px solid var(--line)' }),
               el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Photo prête'));
           }
         });
@@ -143,8 +165,8 @@ function formRecompense(r) {
   const body = el('div', {},
     imgPreview,
     champ('Libellé', label),
-    el('div', { class: 'fields' }, champ('Type', scope), champ('Prix en points', cost),
-      champ('Minimum par enfant', minPc)),
+    el('div', { class: 'fields' }, champ('Type de récompense', scope), champ('Prix en points', cost),
+      champ('Minimum par enfant (collectif)', minPc)),
     champ('Description', desc),
     jauge);
 
@@ -167,32 +189,234 @@ function formRecompense(r) {
 }
 
 // ---------------------------------------------------------------------
-function render() {
-  const app = root; app.innerHTML = '';
-  app.append(el('h1', {}, 'Réglages'));
+// 1. ONGLET 1 : ÉQUIPAGE & FAMILLE
+// ---------------------------------------------------------------------
+function renderCrewSection(app) {
+  // --- Section 1 : Les Enfants
+  const activeKids = allChildren.filter(c => c.active !== false);
+  const archivedKids = allChildren.filter(c => c.active === false);
 
-  // --- boutons de sélection thématiques (style Analyse, pas de débordement)
-  const themes = [
-    { id: 'categories', label: 'Catégories & barème' },
-    { id: 'savings',    label: '🐷 Épargne & Tirelire' },
-    { id: 'photos',     label: '📷 Gestion des photos' },
-    { id: 'boosters',   label: 'Boosters' },
-    { id: 'rewards',    label: 'Récompenses' },
-    { id: 'system',     label: 'Options & effets' }
-  ];
+  const kidsCard = el('div', { class: 'card' },
+    el('div', { class: 'row', style: 'margin-bottom:12px' },
+      el('h2', { style: 'margin:0' }, 'Les Enfants de l’équipage (' + activeKids.length + ')'),
+      el('div', { class: 'spacer' }),
+      el('button', {
+        class: 'btn btn-sm btn-primary',
+        onclick: () => openAddChildModal()
+      }, '+ Ajouter un enfant')),
+    el('table', { class: 'responsive' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Enfant'), el('th', {}, 'Naissance'),
+        el('th', {}, 'Objectif hebdo'), el('th', {}, 'Part Tirelire'), el('th', {}, 'Couleur'), el('th', {}, 'Actions'))),
+      el('tbody', {}, ...activeKids.map(c => {
+        const b = el('input', { type: 'date', value: c.birth_date || '' });
+        const g = el('input', { type: 'number', min: '5', max: '100', value: String(c.weekly_goal || 42) });
+        const sav = el('input', { type: 'number', min: '0', max: '100', value: String(c.savings_pct ?? 70), style: 'width:65px' });
+        const col = el('input', { type: 'color', value: c.color, style: 'padding:2px;height:40px;width:50px' });
+        return el('tr', {},
+          el('td', { 'data-th': 'Enfant' },
+            el('button', {
+              type: 'button', class: 'btn btn-sm',
+              style: 'display:inline-flex;align-items:center;gap:8px;padding:4px 10px',
+              title: 'Changer la photo de ' + c.first_name,
+              onclick: () => {
+                openPhotoCropper({
+                  title: 'Photo de ' + c.first_name,
+                  isCircle: true, existingSrc: c.avatar || null,
+                  onSave: async blob => {
+                    const url = await api.uploadMedia(blob, 'child_' + c.id);
+                    await api.update('children', c.id, { avatar: url });
+                    await reload(); toast('Photo de ' + c.first_name + ' mise à jour !');
+                  }
+                });
+              }
+            },
+              avatar(c.first_name, { size: 'xs', customSrc: c.avatar, title: c.first_name }),
+              el('strong', {}, c.first_name))),
+          el('td', { 'data-th': 'Naissance' }, b),
+          el('td', { 'data-th': 'Objectif' }, g),
+          el('td', { 'data-th': 'Part Tirelire' }, el('div', { style: 'display:flex;align-items:center;gap:4px' }, sav, el('span', { class: 'muted' }, '%'))),
+          el('td', { 'data-th': 'Couleur' }, col),
+          el('td', { 'data-th': 'Actions' },
+            el('div', { class: 'row', style: 'gap:6px' },
+              el('button', {
+                class: 'btn btn-sm btn-primary', onclick: async () => {
+                  try {
+                    await api.save('children', {
+                      id: c.id, family_id: famille, first_name: c.first_name,
+                      birth_date: b.value || null, weekly_goal: Number(g.value),
+                      savings_pct: Number(sav.value), color: col.value,
+                      active: true, sort_order: c.sort_order
+                    });
+                    await reload(); toast('Enfant mis à jour.');
+                  } catch (e) { fail(e); }
+                }
+              }, 'Enregistrer'),
+              el('button', {
+                class: 'btn btn-sm btn-ghost', style: 'color:var(--red)',
+                title: 'Archiver l’enfant sans supprimer son historique',
+                onclick: async () => {
+                  if (!window.confirm('Archiver ' + c.first_name + ' ?\n\nIl ne sera plus affiché sur la saisie rapide, mais tout son historique de points restera précieusement conservé.')) return;
+                  try {
+                    await api.archiveChild(c.id);
+                    await reload(); toast(c.first_name + ' archivé.');
+                  } catch (e) { fail(e); }
+                }
+              }, 'Archiver'))));
+      }))));
 
-  app.append(el('div', { class: 'chips', style: 'margin-bottom:14px' },
-    ...themes.map(t => el('button', {
-      class: 'chip' + (currentTheme === t.id ? ' on' : ''),
-      onclick: () => { currentTheme = t.id; render(); }
-    }, t.label))));
+  if (archivedKids.length) {
+    kidsCard.append(
+      el('div', { style: 'margin-top:16px;padding-top:12px;border-top:1px solid var(--line)' },
+        el('h3', { class: 'muted', style: 'margin:0 0 10px' }, 'Enfants archivés (' + archivedKids.length + ')'),
+        el('div', { style: 'display:grid;gap:8px' },
+          ...archivedKids.map(k => el('div', { class: 'row', style: 'background:#f8fafc;padding:8px 12px;border-radius:10px' },
+            avatar(k.first_name, { size: 'xs', customSrc: k.avatar }),
+            el('span', {}, k.first_name),
+            el('span', { class: 'muted', style: 'font-size:.8rem' }, 'Archivé'),
+            el('div', { class: 'spacer' }),
+            el('button', {
+              class: 'btn btn-sm',
+              onclick: async () => {
+                await api.restoreChild(k.id);
+                await reload(); toast(k.first_name + ' réactivé !');
+              }
+            }, 'Réactiver'))))));
+  }
+  app.append(kidsCard);
 
+  // --- Section 2 : Les Adultes / Équipage élargi
+  const parentsCard = el('div', { class: 'card' },
+    el('div', { class: 'row', style: 'margin-bottom:12px' },
+      el('h2', { style: 'margin:0' }, 'Les Adultes de l’équipage (' + parents.length + ')'),
+      el('div', { class: 'spacer' }),
+      el('button', {
+        class: 'btn btn-sm btn-primary',
+        onclick: () => openAddCrewModal()
+      }, '+ Inviter un membre')),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Deux catégories de profils : les Parents (administrateurs) et les autres membres d’équipage (grands-parents, nounou, tonton/tata) qui peuvent noter les enfants sans modifier les règles.'),
+    el('div', { style: 'display:grid;gap:10px;margin-top:12px' },
+      ...parents.map(p => {
+        const isAdmin = p.is_admin === true;
+        return el('div', { style: 'display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff' },
+          el('div', { style: 'display:flex;align-items:center;gap:12px' },
+            avatar(p.display_name, { size: 'sm', customSrc: p.avatar_url }),
+            el('div', {},
+              el('div', { style: 'display:flex;align-items:center;gap:8px' },
+                el('strong', {}, p.display_name),
+                el('span', {
+                  class: 'badge',
+                  style: isAdmin ? 'background:#e0f2fe;color:var(--cyan-d);font-size:.72rem' : 'background:#f1f5f9;color:var(--muted);font-size:.72rem'
+                }, isAdmin ? '★ Parent Admin' : (p.role_title || 'Membre d’équipage'))),
+              el('span', { class: 'muted', style: 'font-size:.8rem' }, p.email || 'Email non renseigné'))),
+          !isAdmin ? el('button', {
+            class: 'btn btn-sm btn-ghost', style: 'color:var(--red)',
+            onclick: async () => {
+              if (!window.confirm('Retirer ' + p.display_name + ' de l’équipage ? Son accès sera révoqué.')) return;
+              try {
+                await api.removeCrewMember(p.user_id);
+                await reload(); toast(p.display_name + ' retiré de l’équipage.');
+              } catch (e) { fail(e); }
+            }
+          }, 'Retirer') : el('span', { class: 'muted', style: 'font-size:.8rem' }, 'Titulaire'));
+      }))
+  );
+  app.append(parentsCard);
+}
 
+function openAddChildModal() {
+  const nameInput = el('input', { type: 'text', placeholder: 'Prénom de l’enfant', required: true });
+  const birthInput = el('input', { type: 'date' });
+  const goalInput = el('input', { type: 'number', min: '5', max: '100', value: '42' });
+  const savInput = el('input', { type: 'number', min: '0', max: '100', value: '70' });
+  const colorInput = el('input', { type: 'color', value: '#00A7E1', style: 'height:44px' });
+  let childAvatarUrl = null;
+
+  const avatarBox = el('div', { style: 'margin-bottom:12px;display:flex;align-items:center;gap:12px' },
+    el('button', {
+      type: 'button', class: 'btn btn-sm',
+      onclick: () => {
+        openPhotoCropper({
+          title: 'Photo de l’enfant', isCircle: true,
+          onSave: async blob => {
+            childAvatarUrl = await api.uploadMedia(blob, 'new_child');
+            toast('Photo prête !');
+          }
+        });
+      }
+    }, '📷 Choisir une photo'));
+
+  const body = el('div', {},
+    avatarBox,
+    champ('Prénom', nameInput),
+    champ('Date de naissance', birthInput),
+    el('div', { class: 'fields' },
+      champ('Objectif hebdo (points/semaine)', goalInput),
+      champ('Part Tirelire Magique (%)', savInput),
+      champ('Couleur', colorInput)),
+    el('p', { class: 'muted' }, 'Objectif standard : 42 points par semaine (3 pts/jour d’école, 10 pts le week-end). Répartition recommandée : 70 % en Tirelire Magique.'));
+
+  modal('Ajouter un enfant à l’équipage', body, [{
+    label: 'Créer le profil', class: 'btn-primary',
+    onClick: async close => {
+      try {
+        const name = nameInput.value.trim();
+        if (!name) throw new Error('Le prénom est obligatoire.');
+        await api.insert('children', {
+          family_id: famille, first_name: name,
+          birth_date: birthInput.value || null,
+          weekly_goal: Number(goalInput.value) || 42,
+          savings_pct: Number(savInput.value) || 70,
+          color: colorInput.value, avatar: childAvatarUrl,
+          active: true, sort_order: children.length + 1
+        });
+        close(); await reload(); toast('Enfant ajouté avec succès !');
+      } catch (e) { fail(e); }
+    }
+  }]);
+}
+
+function openAddCrewModal() {
+  const nameInput = el('input', { type: 'text', placeholder: 'Ex: Nounou Sophie, Papy Jean', required: true });
+  const roleInput = el('select', {},
+    el('option', { value: 'Grand-parent' }, 'Grand-parent'),
+    el('option', { value: 'Nounou' }, 'Nounou / Babysitter'),
+    el('option', { value: 'Tonton / Tata' }, 'Tonton / Tata'),
+    el('option', { value: 'Membre d’équipage' }, 'Autre proche'));
+  const emailInput = el('input', { type: 'email', placeholder: 'adresse@gmail.com', required: true });
+  const pwdInput = el('input', { type: 'password', placeholder: 'Mot de passe (min 6 caractères)', required: true });
+
+  const body = el('div', {},
+    champ('Prénom / Nom d’usage', nameInput),
+    champ('Rôle dans la famille', roleInput),
+    champ('Adresse email (pour la connexion)', emailInput),
+    champ('Mot de passe initial', pwdInput),
+    el('p', { class: 'muted' },
+      'Ce compte aura un accès simplifié : il pourra saisir des points au quotidien et consulter les scores, mais n’aura aucun droit d’administration sur le barème ou les réglages.'));
+
+  modal('Inviter un membre d’équipage', body, [{
+    label: 'Créer l’accès', class: 'btn-primary',
+    onClick: async close => {
+      try {
+        const name = nameInput.value.trim();
+        const email = emailInput.value.trim();
+        const pwd = pwdInput.value;
+        if (!name || !email || !pwd) throw new Error('Tous les champs sont requis.');
+        if (pwd.length < 6) throw new Error('Le mot de passe doit faire au moins 6 caractères.');
+        await api.createCrewMember(email, pwd, name, roleInput.value);
+        close(); await reload(); toast('Accès créé pour ' + name + ' !');
+      } catch (e) { fail(e); }
+    }
+  }]);
+}
+
+// ---------------------------------------------------------------------
+// 2. ONGLET 2 : PORTEFEUILLE & TIRELIRE
+// ---------------------------------------------------------------------
 function renderSavingsSection(app) {
-  // 1. Carte Taux d'intérêt annuel de la Tirelire Magique
   const rateInput = el('input', {
-    type: 'number', step: '0.5', min: '0', max: '100',
-    value: String(savingsSettings?.annual_interest_rate ?? 12.00)
+    type: 'number', step: '5', min: '0', max: '200',
+    value: String(savingsSettings?.annual_interest_rate ?? 100.00)
   });
 
   const previewBox = el('div', { class: 'card', style: 'background:#fdf4ff;border-color:#f5d0fe;margin-top:12px' });
@@ -201,12 +425,13 @@ function renderSavingsSection(app) {
     const monthly = (annual / 12).toFixed(2);
     previewBox.innerHTML = '';
     previewBox.append(
-      el('h3', { style: 'color:#a21caf;margin-top:0' }, 'Explication pédagogique en direct'),
+      el('h3', { style: 'color:#a21caf;margin-top:0' }, 'Simulation pédagogique des intérêts'),
       el('p', { style: 'margin:0 0 6px;font-size:.9rem' },
-        'Un taux de ', el('strong', {}, annual + ' % par an'), ' équivaut à environ ',
-        el('strong', {}, monthly + ' % par mois'), ' crédités le 1er jour du mois suivant.'),
+        'Taux annuel : ', el('strong', {}, annual + ' % / an'), ' (soit environ ',
+        el('strong', {}, monthly + ' % par mois'), ' versés le 1er de chaque mois).'),
       el('ul', { style: 'margin:0;padding-left:20px;font-size:.85rem;color:#701a75' },
-        el('li', {}, 'Pour 50 points en Tirelire : +' + Math.round(50 * (annual / 100 / 12)) + ' point / mois'),
+        el('li', {}, 'Pour 25 points en Tirelire : +' + Math.round(25 * (annual / 100 / 12)) + ' point(s) / mois'),
+        el('li', {}, 'Pour 50 points en Tirelire : +' + Math.round(50 * (annual / 100 / 12)) + ' point(s) / mois'),
         el('li', {}, 'Pour 100 points en Tirelire : +' + Math.round(100 * (annual / 100 / 12)) + ' point(s) / mois'),
         el('li', {}, 'Pour 200 points en Tirelire : +' + Math.round(200 * (annual / 100 / 12)) + ' point(s) / mois'))
     );
@@ -215,9 +440,9 @@ function renderSavingsSection(app) {
   updatePreview();
 
   const rateCard = el('div', { class: 'card' },
-    el('h2', {}, 'Taux d’intérêt de la Tirelire Magique (Famille)'),
+    el('h2', {}, 'Taux d’intérêt annuel de la Tirelire Magique'),
     el('p', { class: 'muted', style: 'margin-top:-6px' },
-      'L’argent placé sur la Tirelire Magique fait des petits. À la fin de chaque mois, les intérêts sont calculés et versés sur la tirelire.'),
+      'L’argent placé sur la Tirelire Magique fait des petits. À la fin de chaque mois, les intérêts sont calculés et versés sur la tirelire pour inciter à l’épargne long terme.'),
     el('div', { class: 'fields' }, champ('Taux d’intérêt annuel (% / an)', rateInput)),
     previewBox,
     el('div', { class: 'row', style: 'margin-top:14px;gap:10px' },
@@ -226,12 +451,12 @@ function renderSavingsSection(app) {
         onclick: async () => {
           try {
             const annual = Number(rateInput.value);
-            if (isNaN(annual) || annual < 0 || annual > 100) throw new Error('Taux invalide (0 à 100 %).');
+            if (isNaN(annual) || annual < 0 || annual > 200) throw new Error('Taux invalide (0 à 200 %).');
             await api.save('savings_settings', {
               family_id: famille, annual_interest_rate: annual, active: true, updated_at: new Date().toISOString()
             });
             savingsSettings = { family_id: famille, annual_interest_rate: annual, active: true };
-            toast('Taux d’intérêt de la Tirelire enregistré !');
+            toast('Taux d’intérêt enregistré !');
             await reload();
           } catch (e) { fail(e); }
         }
@@ -242,7 +467,7 @@ function renderSavingsSection(app) {
           try {
             toast('Vérification des intérêts en cours…');
             const count = await api.applyMonthlyInterest();
-            toast(count > 0 ? (count + ' versement(s) d’intérêts effectué(s) ! Bon vol.') : 'Tous les intérêts du mois écoulé sont déjà versés.');
+            toast(count > 0 ? (count + ' versement(s) d’intérêts effectué(s) !') : 'Les intérêts du mois écoulé sont déjà versés.');
             await reload();
           } catch (e) { fail(e); }
         }
@@ -254,23 +479,23 @@ function renderSavingsSection(app) {
   const kidsCard = el('div', { class: 'card' },
     el('h2', {}, 'Répartition des points par enfant'),
     el('p', { class: 'muted', style: 'margin-top:-6px' },
-      'Pendant la journée, les points sont virtuels. À minuit, les points nets de la journée basculent en vrais points ventilés entre Portefeuille et Tirelire Magique.'),
+      'Chaque soir à minuit, les points nets de la journée basculent du statut virtuel vers les vrais points, répartis entre le Portefeuille (dépenses libres) et la Tirelire Magique (épargne à intérêts).'),
     el('div', { style: 'display:grid;gap:14px' },
       ...children.map(c => {
         const bo = balances.find(x => x.child_id === c.id) || {};
-        const curPct = c.savings_pct ?? 30;
+        const curPct = c.savings_pct ?? 70;
         const slider = el('input', {
           type: 'range', min: '0', max: '100', step: '5', value: String(curPct),
           style: 'width:100%;cursor:pointer'
         });
         const pctLabel = el('strong', { style: 'font-size:1.1rem;color:#a21caf' }, curPct + ' %');
-        const detailP = el('p', { class: 'muted', style: 'font-size:.82rem;margin:4px 0 0' });
+        const detailP = el('p', { class: 'muted', style: 'font-size:.84rem;margin:4px 0 0' });
 
         const updateChildDesc = () => {
           const sPct = Number(slider.value);
           const wPct = 100 - sPct;
           pctLabel.textContent = sPct + ' %';
-          detailP.textContent = 'Chaque fin de journée : ' + wPct + ' % dans le Portefeuille 👛 et ' + sPct + ' % dans la Tirelire Magique 🐷✨.';
+          detailP.textContent = 'Bascule de minuit : ' + wPct + ' % dans le Portefeuille 👛 et ' + sPct + ' % dans la Tirelire Magique 🐷✨.';
         };
         slider.addEventListener('input', updateChildDesc);
         updateChildDesc();
@@ -285,7 +510,7 @@ function renderSavingsSection(app) {
               el('span', { style: 'background:#fdf4ff;color:#a21caf;padding:2px 8px;border-radius:6px;border:1px solid #f5d0fe' }, '🐷 ' + (bo.savings_balance ?? 0) + ' pts'))),
           el('div', { style: 'margin:10px 0 6px' },
             el('div', { style: 'display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px' },
-              el('span', {}, 'Part Tirelire Magique :'),
+              el('span', {}, 'Part Tirelire Magique (épargne) :'),
               pctLabel),
             slider,
             detailP),
@@ -310,479 +535,252 @@ function renderSavingsSection(app) {
   app.append(kidsCard);
 }
 
-  if (currentTheme === 'categories') {
-    // --- enfants
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Enfants'),
-      el('table', { class: 'responsive' },
-        el('thead', {}, el('tr', {}, el('th', {}, 'Prénom'), el('th', {}, 'Naissance'),
-          el('th', {}, 'Objectif hebdo'), el('th', {}, 'Part Tirelire'), el('th', {}, 'Couleur'), el('th', {}, ''))),
-        el('tbody', {}, ...children.map(c => {
-          const b = el('input', { type: 'date', value: c.birth_date || '' });
-          const g = el('input', { type: 'number', min: '5', max: '60', value: String(c.weekly_goal) });
-          const sav = el('input', { type: 'number', min: '0', max: '100', value: String(c.savings_pct ?? 30), style: 'width:70px' });
-          const col = el('input', { type: 'color', value: c.color, style: 'padding:2px;height:44px' });
-          return el('tr', {},
-            el('td', { 'data-th': 'Photo' },
-              el('button', {
-                type: 'button',
-                class: 'btn btn-sm',
-                style: 'display:inline-flex;align-items:center;gap:8px;padding:4px 10px',
-                title: 'Changer la photo de ' + c.first_name,
-                onclick: () => {
-                  openPhotoCropper({
-                    title: 'Photo de ' + c.first_name,
-                    isCircle: true,
-                    existingSrc: c.avatar || null,
-                    onSave: async blob => {
-                      const url = await api.uploadMedia(blob, 'child_' + c.id);
-                      await api.update('children', c.id, { avatar: url });
-                      await reload();
-                      toast('Photo de ' + c.first_name + ' mise à jour !');
-                    }
-                  });
-                }
-              },
-                avatar(c.first_name, { size: 'xs', customSrc: c.avatar, title: c.first_name }),
-                el('span', {}, c.first_name))),
-            el('td', { 'data-th': 'Naissance' }, b),
-            el('td', { 'data-th': 'Objectif' }, g),
-            el('td', { 'data-th': 'Part Tirelire' }, el('div', { style: 'display:flex;align-items:center;gap:4px' }, sav, el('span', { class: 'muted' }, '%'))),
-            el('td', { 'data-th': 'Couleur' }, col),
-            el('td', { 'data-th': '' }, el('button', {
-              class: 'btn btn-sm btn-primary', onclick: async () => {
-                try {
-                  await api.save('children', { id: c.id, family_id: famille, first_name: c.first_name,
-                    birth_date: b.value || null, weekly_goal: Number(g.value), savings_pct: Number(sav.value), color: col.value,
-                    active: true, sort_order: c.sort_order });
-                  await reload(); toast('Enregistré.');
-                } catch (e) { fail(e); }
-              }
-            }, 'Enregistrer')));
-        })))));
+// ---------------------------------------------------------------------
+// 3. ONGLET 3 : BARÈME & BOOSTER
+// ---------------------------------------------------------------------
+function renderBaremeSection(app) {
+  // Boosters calendaires
+  const weekBooster = boosters.find(b => b.period_type === 'week');
+  const monthBooster = boosters.find(b => b.period_type === 'month');
 
-    // --- categories
-    const catBox = el('div', { class: 'card' },
-      el('div', { class: 'row' }, el('h2', { style: 'margin:0' }, 'Catégories et barème'),
+  app.append(el('div', { class: 'card' },
+    el('h2', {}, 'Boosters de régularité'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Un bonus accordé quand l’enfant valide un nombre de jours réguliers et un total de points sur la période.'),
+    el('div', { class: 'grid grid-2' },
+      boosterForm('week', 'Booster semaine calendaire', 'Du lundi au dimanche.', 7, weekBooster),
+      boosterForm('month', 'Booster mois calendaire', 'Du premier au dernier jour du mois.', 31, monthBooster))));
+
+  // Catégories & Barème
+  const catBox = el('div', { class: 'card' },
+    el('div', { class: 'row' },
+      el('h2', { style: 'margin:0' }, 'Catégories et barème de points'),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'btn btn-sm btn-primary', onclick: () => formCategorie(null, null) }, '+ Grande catégorie')),
+    el('p', { class: 'muted', style: 'margin-top:4px' },
+      'Étalon de référence recommandé : 3 points par jour avec école (~12 pts/semaine), 10 points par jour sans école (~30 pts/week-end), soit un total de 42 points par semaine.'));
+
+  roots().forEach(r => {
+    catBox.append(el('div', { style: 'margin-top:16px;padding-top:12px;border-top:1px solid var(--line)' },
+      el('div', { class: 'row' },
+        el('strong', {}, r.label),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn-sm', onclick: () => formCategorie(null, null) }, '+ Grande catégorie')));
-    roots().forEach(r => {
-      catBox.append(el('div', { style: 'margin-top:16px;padding-top:12px;border-top:1px solid var(--line)' },
-        el('div', { class: 'row' },
-          el('strong', {}, r.label),
-          el('div', { class: 'spacer' }),
-          el('button', { class: 'btn btn-sm', onclick: () => formCategorie(r) }, 'Modifier'),
-          el('button', { class: 'btn btn-sm', onclick: () => formCategorie(null, r.id) }, '+ Sous-catégorie')),
-        el('div', { class: 'tiles', style: 'margin-top:10px' },
-          ...subs(r.id).map(s => el('button', {
-            class: 'tile ' + (s.kind === 'malus' ? 'tile-malus' : 'tile-bonus'),
-            style: s.active ? '' : 'opacity:.45', onclick: () => formCategorie(s)
-          },
-            el('span', { class: 'tile-label' }, s.label),
-            el('span', { class: 'tile-pts' },
-              (s.kind === 'malus' ? '-' : '+') + s.default_points +
-              (s.repairable ? ' · réparable' : '')))))));
-    });
-    app.append(catBox);
-
-  } else if (currentTheme === 'savings') {
-    renderSavingsSection(app);
-  } else if (currentTheme === 'photos') {
-    // --- réglage interactif en direct des dimensions des photos
-    const currentSaisiePx = parseInt(localStorage.getItem('air_avatar_size_saisie') || '76', 10);
-    const currentRecPx = parseInt(localStorage.getItem('air_avatar_size_recompense') || '90', 10);
-
-    const sliderSaisie = el('input', {
-      type: 'range', min: '50', max: '110', step: '2', value: String(currentSaisiePx),
-      style: 'width:100%;margin:8px 0'
-    });
-    const labelSaisieVal = el('strong', {}, currentSaisiePx + ' px');
-    const previewSaisieAvatar = el('div', { class: 'kid-custom-avatar', style: 'margin:10px 0;display:flex;justify-content:center' },
-      avatar(children[0]?.first_name || 'Aperçu', { size: 'xl', customSrc: children[0]?.avatar || null }));
-
-    sliderSaisie.oninput = e => {
-      const val = e.target.value;
-      labelSaisieVal.textContent = val + ' px';
-      document.documentElement.style.setProperty('--avatar-size-saisie', val + 'px');
-      localStorage.setItem('air_avatar_size_saisie', val);
-    };
-
-    const sliderRec = el('input', {
-      type: 'range', min: '60', max: '140', step: '2', value: String(currentRecPx),
-      style: 'width:100%;margin:8px 0'
-    });
-    const labelRecVal = el('strong', {}, currentRecPx + ' px');
-    const previewRecAvatar = el('div', { class: 'recompense-custom-avatar', style: 'margin:10px 0;display:flex;justify-content:center' },
-      avatar(children[0]?.first_name || 'Aperçu', { size: 'xl', customSrc: children[0]?.avatar || null }));
-
-    sliderRec.oninput = e => {
-      const val = e.target.value;
-      labelRecVal.textContent = val + ' px';
-      document.documentElement.style.setProperty('--avatar-size-recompense', val + 'px');
-      localStorage.setItem('air_avatar_size_recompense', val);
-    };
-
-    app.append(el('div', { class: 'card', style: 'border:2px solid var(--cyan);background:#f0fdf4' },
-      el('h2', { style: 'color:var(--navy);display:flex;align-items:center;gap:8px' }, '📐 Dimensions des photos (réglage en direct)'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Ajuste la taille des photos avec le curseur. L\'aperçu en direct s\'actualise immédiatement et s\'applique à toute l\'application :'),
-      el('div', { class: 'grid grid-2', style: 'margin-top:14px;gap:14px' },
-        el('div', { class: 'card', style: 'background:#fff;margin-bottom:0;text-align:center' },
-          el('h3', {}, 'Taille photo Saisie'),
-          el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
-            el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Curseur'),
-            labelSaisieVal),
-          sliderSaisie,
-          previewSaisieAvatar),
-        el('div', { class: 'card', style: 'background:#fff;margin-bottom:0;text-align:center' },
-          el('h3', {}, 'Taille photo Récompenses'),
-          el('div', { class: 'row', style: 'justify-content:space-between;align-items:center' },
-            el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Curseur'),
-            labelRecVal),
-          sliderRec,
-          previewRecAvatar))));
-
-    // --- hub de gestion centralisée des photos (enfants, parents, récompenses)
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Photos de profil des enfants'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Clique sur un enfant pour recadrer ou importer sa photo (cercle guide type LinkedIn) :'),
-      el('div', { class: 'grid grid-2', style: 'margin-top:14px' },
-        ...children.map(c => el('div', {
-          class: 'card',
-          style: `display:flex;align-items:center;gap:14px;margin-bottom:0;border-left:4px solid ${c.color}`
+        el('button', { class: 'btn btn-sm', onclick: () => formCategorie(r) }, 'Modifier'),
+        el('button', { class: 'btn btn-sm', onclick: () => formCategorie(null, r.id) }, '+ Sous-catégorie')),
+      el('div', { class: 'tiles', style: 'margin-top:10px' },
+        ...subs(r.id).map(s => el('button', {
+          class: 'tile ' + (s.kind === 'malus' ? 'tile-malus' : 'tile-bonus'),
+          style: s.active ? '' : 'opacity:.45', onclick: () => formCategorie(s)
         },
-          avatar(c.first_name, { size: 'lg', customSrc: c.avatar, title: c.first_name }),
-          el('div', { style: 'flex:1;min-width:0' },
-            el('strong', { style: 'font-size:1.05rem' }, c.first_name),
-            el('div', { class: 'muted', style: 'font-size:.8rem' }, c.avatar ? 'Photo personnalisée' : 'Photo par défaut')),
-          el('div', { class: 'row', style: 'gap:6px' },
-            el('button', {
-              type: 'button',
-              class: 'btn btn-sm btn-primary',
-              title: 'Recadrer la photo actuelle',
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Cadrer la photo de ' + c.first_name,
-                  isCircle: true,
-                  existingSrc: c.avatar || null,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'child_' + c.id);
-                    await api.update('children', c.id, { avatar: url });
-                    await reload();
-                    toast('Photo de ' + c.first_name + ' mise à jour !');
-                  }
-                });
-              }
-            }, 'Cadrer'),
-            el('button', {
-              type: 'button',
-              class: 'btn btn-sm',
-              title: 'Choisir une nouvelle photo',
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Nouvelle photo de ' + c.first_name,
-                  isCircle: true,
-                  existingSrc: null,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'child_' + c.id);
-                    await api.update('children', c.id, { avatar: url });
-                    await reload();
-                    toast('Nouvelle photo de ' + c.first_name + ' enregistrée !');
-                  }
-                });
-              }
-            }, 'Modifier')))))));
+          el('span', { class: 'tile-label' }, s.label),
+          el('span', { class: 'tile-pts' },
+            (s.kind === 'malus' ? '-' : '+') + s.default_points +
+            (s.repairable ? ' · réparable' : '')))))));
+  });
+  app.append(catBox);
+}
 
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Photos des parents'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Personnalise les photos de profil des parents de la famille :'),
-      el('div', { class: 'grid grid-2', style: 'margin-top:14px' },
-        ...parents.map(p => el('div', {
-          class: 'card',
-          style: 'display:flex;align-items:center;gap:14px;margin-bottom:0'
-        },
-          avatar(p.display_name, { size: 'lg', customSrc: p.avatar_url, title: p.display_name }),
-          el('div', { style: 'flex:1;min-width:0' },
-            el('strong', { style: 'font-size:1.05rem' }, p.display_name),
-            el('div', { class: 'muted', style: 'font-size:.8rem' }, p.avatar_url ? 'Photo personnalisée' : 'Photo par défaut')),
-          el('div', { class: 'row', style: 'gap:6px' },
-            el('button', {
-              type: 'button',
-              class: 'btn btn-sm btn-primary',
-              title: 'Recadrer la photo actuelle',
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Cadrer la photo de ' + p.display_name,
-                  isCircle: true,
-                  existingSrc: p.avatar_url || null,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
-                    await api.updateParentProfile({ avatar_url: url });
-                    await reload();
-                    toast('Photo de ' + p.display_name + ' mise à jour !');
-                  }
-                });
-              }
-            }, 'Cadrer'),
-            el('button', {
-              type: 'button',
-              class: 'btn btn-sm',
-              title: 'Choisir une nouvelle photo',
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Nouvelle photo de ' + p.display_name,
-                  isCircle: true,
-                  existingSrc: null,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'parent_' + p.user_id);
-                    await api.updateParentProfile({ avatar_url: url });
-                    await reload();
-                    toast('Nouvelle photo de ' + p.display_name + ' enregistrée !');
-                  }
-                });
-              }
-            }, 'Modifier')))))));
+function boosterForm(periodType, title, desc, maxDays, current) {
+  const activeInput = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: current?.active || false });
+  const dailyInput = el('input', { type: 'number', min: '1', max: '30', value: String(current?.daily_min_points || (periodType === 'week' ? 2 : 2)) });
+  const daysInput = el('input', { type: 'number', min: '1', max: String(maxDays), value: String(current?.qualifying_days || (periodType === 'week' ? 5 : 20)) });
+  const totalInput = el('input', { type: 'number', min: '1', max: '300', value: String(current?.total_min_points || (periodType === 'week' ? 18 : 75)) });
+  const bonusInput = el('input', { type: 'number', min: '1', max: '100', value: String(current?.bonus_points || (periodType === 'week' ? 5 : 20)) });
 
-    const rewardsWithImages = rewards.filter(r => r.active);
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Photos des récompenses du catalogue'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Associe une image cadrée pour chaque cadeau ou sortie collective :'),
-      el('div', { class: 'grid grid-2', style: 'margin-top:14px' },
-        ...rewardsWithImages.map(r => el('div', {
-          class: 'card',
-          style: 'display:flex;align-items:center;gap:14px;margin-bottom:0'
-        },
-          r.image_url
-            ? el('img', { src: r.image_url, style: 'width:60px;height:60px;border-radius:12px;object-fit:cover;border:1px solid var(--line)' })
-            : el('span', { style: 'width:60px;height:60px;border-radius:12px;background:#e2e8f0;display:grid;place-items:center;font-size:1.5rem' }, '🎁'),
-          el('div', { style: 'flex:1;min-width:0' },
-            el('strong', { style: 'font-size:.95rem' }, r.label),
-            el('div', { class: 'muted', style: 'font-size:.8rem' }, r.cost + ' pts')),
-          el('div', { class: 'row', style: 'gap:6px' },
-            r.image_url ? el('button', {
-              type: 'button',
-              class: 'btn btn-sm btn-primary',
-              title: 'Recadrer l\'image actuelle',
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Cadrer : ' + r.label,
-                  isCircle: false,
-                  aspectRatio: 16 / 9,
-                  existingSrc: r.image_url,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'reward_' + r.id);
-                    await api.update('rewards', r.id, { image_url: url });
-                    await reload();
-                    toast('Photo de récompense recadrée !');
-                  }
-                });
-              }
-            }, 'Cadrer') : null,
-            el('button', {
-              type: 'button',
-              class: 'btn btn-sm',
-              title: r.image_url ? 'Remplacer par une autre photo' : 'Importer une photo',
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Photo : ' + r.label,
-                  isCircle: false,
-                  aspectRatio: 16 / 9,
-                  existingSrc: null,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'reward_' + r.id);
-                    await api.update('rewards', r.id, { image_url: url });
-                    await reload();
-                    toast('Nouvelle photo de récompense enregistrée !');
-                  }
-                });
-              }
-            }, r.image_url ? 'Modifier' : 'Ajouter')))))));
-
-  } else if (currentTheme === 'boosters') {
-    // --- boosters calendaires
-    function boosterForm(type, title, description, maxDays, setting) {
-      const active = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: setting?.active || false });
-      const daily = el('input', { type: 'number', min: '0', step: '1', value: String(setting?.daily_min_points ?? 2) });
-      const days = el('input', { type: 'number', min: '1', max: String(maxDays), step: '1', value: String(setting?.qualifying_days ?? (type === 'week' ? 5 : 20)) });
-      const total = el('input', { type: 'number', min: '1', step: '1', value: String(setting?.total_min_points ?? (type === 'week' ? 18 : 70)) });
-      const bonus = el('input', { type: 'number', min: '1', step: '1', value: String(setting?.bonus_points ?? 5) });
-      const error = el('p', { class: 'error', hidden: true });
-      const save = async () => {
-        const d = Number(daily.value), n = Number(days.value), t = Number(total.value), b = Number(bonus.value);
-        if (![d, n, t, b].every(Number.isInteger) || d < 0 || n < 1 || n > maxDays || t < 1 || b < 1) {
-          error.hidden = false;
-          error.textContent = 'Saisis des nombres entiers valides : jours entre 1 et ' + maxDays + ', points positifs.';
-          return;
-        }
-        error.hidden = true;
+  return el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff' },
+    el('label', { class: 'row', style: 'gap:8px;cursor:pointer;margin-bottom:8px' }, activeInput, el('strong', {}, title)),
+    el('p', { class: 'muted', style: 'font-size:.82rem;margin:0 0 10px' }, desc),
+    el('div', { class: 'fields' },
+      champ('Au moins (pts/jour)', dailyInput),
+      champ('Sur au moins (jours)', daysInput),
+      champ('Total requis (points)', totalInput),
+      champ('Bonus accordé (points)', bonusInput)),
+    el('button', {
+      class: 'btn btn-primary btn-sm', style: 'margin-top:10px',
+      onclick: async () => {
         try {
           await api.save('booster_settings', {
-            family_id: famille, period_type: type, active: active.checked,
-            daily_min_points: d, qualifying_days: n, total_min_points: t, bonus_points: b,
-            min_points: setting?.min_points ?? d, multiplier: setting?.multiplier ?? 1
+            family_id: famille, period_type: periodType,
+            active: activeInput.checked,
+            daily_min_points: Number(dailyInput.value),
+            qualifying_days: Number(daysInput.value),
+            total_min_points: Number(totalInput.value),
+            bonus_points: Number(bonusInput.value),
+            multiplier: 1.0, updated_at: new Date().toISOString()
           });
-          await reload(); toast(title + ' enregistré.');
+          toast(title + ' enregistré !');
+          await reload();
         } catch (e) { fail(e); }
-      };
-      return el('div', { class: 'card', style: 'margin-top:12px' },
-        el('h3', {}, title),
-        el('p', { class: 'muted', style: 'margin-top:-6px' }, description),
-        el('label', { class: 'row', style: 'gap:8px;cursor:pointer' }, active,
-          el('span', { style: 'font-weight:400;color:var(--ink)' }, 'Activer ce booster')),
-        el('div', { class: 'fields' },
-          champ('Minimum par jour', daily),
-          champ('Nombre de jours minimum', days),
-          champ('Total minimum sur la période', total),
-          champ('Points du booster', bonus)),
-        error,
-        el('button', { class: 'btn btn-primary btn-sm', onclick: save }, 'Enregistrer'));
-    }
-    const weekBooster = boosters.find(b => b.period_type === 'week');
-    const monthBooster = boosters.find(b => b.period_type === 'month');
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Boosters'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Chaque booster est évalué automatiquement à l’ouverture de l’application pour la dernière période complète. Les trois conditions doivent être remplies : seuil quotidien sur un nombre minimum de jours, puis total minimum de points sur toute la période.'),
-      boosterForm('week', 'Booster semaine calendaire', 'Du lundi au dimanche. Exemple : au moins 2 points sur 5 jours et 18 points au total.', 7, weekBooster),
-      boosterForm('month', 'Booster mois calendaire', 'Du premier au dernier jour du mois.', 31, monthBooster)));
+      }
+    }, 'Enregistrer ce booster'));
+}
 
-  } else if (currentTheme === 'rewards') {
-    // --- catalogue
-    app.append(el('div', { class: 'card' },
-      el('div', { class: 'row', style: 'margin-bottom:10px' },
-        el('h2', { style: 'margin:0' }, 'Catalogue de récompenses'),
-        el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn-sm', onclick: () => formRecompense(null) }, '+ Récompense')),
-      el('p', { class: 'muted', style: 'margin-top:-4px' },
-        'Règle de calibration : prix = semaines d\'attente souhaitées × ' + ETALON + '.'),
-      el('table', { class: 'responsive' },
-        el('thead', {}, el('tr', {}, el('th', {}, 'Récompense'), el('th', {}, 'Type'),
-          el('th', {}, 'Prix'), el('th', {}, 'Min/enfant'), el('th', {}, 'Attente'), el('th', {}, ''))),
-        el('tbody', {}, ...rewards.map(r => {
-          const sem = Math.round((r.scope === 'collective' ? r.cost / (ETALON * children.length) : r.cost / ETALON) * 10) / 10;
-          return el('tr', { style: r.active ? '' : 'opacity:.45' },
-            el('td', { 'data-th': 'Récompense' }, r.label),
-            el('td', { 'data-th': 'Type' }, r.scope === 'collective' ? 'Ensemble' : 'Individuel'),
-            el('td', { 'data-th': 'Prix' }, r.cost + ' pts'),
-            el('td', { 'data-th': 'Min/enfant' }, String(r.min_per_child)),
-            el('td', { 'data-th': 'Attente' }, sem + ' sem.'),
-            el('td', { 'data-th': '' }, el('button', { class: 'btn btn-sm', onclick: () => formRecompense(r) }, 'Modifier')));
-        })))));
+// ---------------------------------------------------------------------
+// 4. ONGLET 4 : RÉCOMPENSES
+// ---------------------------------------------------------------------
+function renderRewardsSection(app) {
+  app.append(el('div', { class: 'card' },
+    el('div', { class: 'row', style: 'margin-bottom:12px' },
+      el('h2', { style: 'margin:0' }, 'Catalogue des récompenses (' + rewards.length + ')'),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'btn btn-sm btn-primary', onclick: () => formRecompense(null) }, '+ Nouvelle récompense')),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Les récompenses individuelles sont payées par le Portefeuille 👛. Les sorties collectives sont payées par la Tirelire Magique 🐷✨. Les temps d’attente sont calculés en direct selon les objectifs réels de vos enfants.'),
+    el('div', { class: 'rewards', style: 'margin-top:14px' },
+      ...rewards.map(r => {
+        const isCollective = r.scope === 'collective';
+        return el('div', { class: 'reward' },
+          r.image_url ? el('img', { src: r.image_url, class: 'reward-img' }) : null,
+          el('div', { class: 'reward-top' },
+            el('div', {},
+              el('strong', {}, r.label),
+              el('div', { style: 'font-size:.74rem;font-weight:700;margin-top:2px;color:' + (isCollective ? '#a21caf' : 'var(--cyan-d)') },
+                isCollective ? '🐷 Tirelire Magique (Collectif)' : '👛 Portefeuille (Individuel)')),
+            el('span', { class: 'reward-cost' }, r.cost + ' pts')),
+          el('div', { class: 'eta', style: 'margin:8px 0' },
+            isCollective
+              ? 'Minimum requis : ' + r.min_per_child + ' pts par enfant'
+              : 'Dépense libre sur le portefeuille personnel'),
+          el('div', { class: 'row', style: 'margin-top:10px;gap:8px' },
+            el('button', { class: 'btn btn-sm', onclick: () => formRecompense(r) }, 'Modifier'),
+            el('button', {
+              class: 'btn btn-sm btn-ghost', style: 'color:var(--red)',
+              onclick: async () => {
+                if (!window.confirm('Supprimer ' + r.label + ' ?')) return;
+                await api.remove('rewards', r.id);
+                await reload(); toast('Récompense supprimée.');
+              }
+            }, 'Supprimer')));
+      }))
+  ));
+}
 
-  } else if (currentTheme === 'system') {
-    // --- cinématiques
-    const fx1 = el('input', { type: 'number', min: '1', max: '999', value: String(cinematic?.level_1_min ?? 1) });
-    const fx2 = el('input', { type: 'number', min: '2', max: '999', value: String(cinematic?.level_2_min ?? 5) });
-    const fx3 = el('input', { type: 'number', min: '3', max: '999', value: String(cinematic?.level_3_min ?? 16) });
-    const fxHelp = el('p', { class: 'muted' },
-      'Les seuils s’appliquent aux points gagnés lors d’une seule saisie. Les malus ne déclenchent jamais de feu d’artifice.');
-    const fxError = el('p', { class: 'error', hidden: true });
-    const fxCard = el('div', { class: 'card' },
-      el('h2', {}, 'Cinématiques de récompense'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Choisis à partir de combien de points chaque niveau d’effet se déclenche.'),
-      el('div', { class: 'fields' },
-        champ('Retour discret dès', fx1),
-        champ('Pluie de particules dès', fx2),
-        champ('Feu d’artifice dès', fx3)),
-      fxHelp,
-      fxError,
-      el('button', { class: 'btn btn-primary btn-sm', onclick: async () => {
-        const a = Number(fx1.value), b = Number(fx2.value), c = Number(fx3.value);
-        if (!Number.isInteger(a) || !Number.isInteger(b) || !Number.isInteger(c) || a < 1 || b <= a || c <= b) {
-          fxError.hidden = false;
-          fxError.textContent = 'Les seuils doivent être des nombres entiers croissants : niveau 1 < niveau 2 < niveau 3.';
-          return;
-        }
-        fxError.hidden = true;
+// ---------------------------------------------------------------------
+// 5. ONGLET 5 : SYSTÈME & EFFETS
+// ---------------------------------------------------------------------
+function renderSystemSection(app) {
+  // Cinématiques
+  const fx1 = el('input', { type: 'number', min: '1', max: '20', value: String(cinematic?.level_1_min ?? 1) });
+  const fx2 = el('input', { type: 'number', min: '2', max: '50', value: String(cinematic?.level_2_min ?? 3) });
+  const fx3 = el('input', { type: 'number', min: '3', max: '100', value: String(cinematic?.level_3_min ?? 8) });
+
+  app.append(el('div', { class: 'card' },
+    el('h2', {}, 'Cinématiques de récompense'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Choisis à partir de combien de points chaque niveau d’effet visuel se déclenche.'),
+    el('div', { class: 'fields' },
+      champ('Retour discret dès (pts)', fx1),
+      champ('Pluie de particules dès (pts)', fx2),
+      champ('Feu d’artifice dès (pts)', fx3)),
+    el('button', {
+      class: 'btn btn-primary btn-sm', style: 'margin-top:10px',
+      onclick: async () => {
         try {
-          await api.save('cinematic_settings', {
-            family_id: famille, level_1_min: a, level_2_min: b, level_3_min: c
-          });
+          const a = Number(fx1.value), b = Number(fx2.value), c = Number(fx3.value);
+          if (a < 1 || b <= a || c <= b) throw new Error('Les seuils doivent être croissants (niveau 1 < niveau 2 < niveau 3).');
+          await api.save('cinematic_settings', { family_id: famille, level_1_min: a, level_2_min: b, level_3_min: c });
           cinematic = { family_id: famille, level_1_min: a, level_2_min: b, level_3_min: c };
           const mod = await import('./cinematics.js');
           mod.setCinematicThresholds(cinematic);
-          toast('Seuils des cinématiques enregistrés.');
+          toast('Seuils des cinématiques enregistrés !');
         } catch (e) { fail(e); }
-      }}, 'Enregistrer les seuils'));
-    app.append(fxCard);
+      }
+    }, 'Enregistrer les seuils')));
 
-    // --- contextes et moments personnalisés
-    const newContextInput = el('input', { type: 'text', placeholder: 'Ex: Chez papi et mamie, Avec maman…' });
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Moments & contextes de journée'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Personnalise les moments proposés dans la liste déroulante lors de la saisie d\'une action.'),
-      el('div', { class: 'row', style: 'gap:8px;margin-bottom:12px' },
-        newContextInput,
-        el('button', {
-          class: 'btn btn-primary btn-sm', onclick: async () => {
-            const val = newContextInput.value.trim();
-            if (!val) return;
-            try {
-              await api.insert('custom_contexts', {
-                family_id: famille, label: val, sort_order: contexts.length + 1
-              });
-              newContextInput.value = '';
-              await reload();
-              toast('Contexte ajouté.');
-            } catch (e) { fail(e); }
-          }
-        }, 'Ajouter')),
-      contexts.length ? el('div', { class: 'chips' },
-        ...contexts.map(ctx => el('div', { class: 'chip', style: 'display:inline-flex;align-items:center;gap:8px' },
-          el('span', {}, ctx.label),
-          el('button', {
-            type: 'button',
-            style: 'border:0;background:transparent;cursor:pointer;color:var(--red);font-weight:700',
-            onclick: async () => {
-              try {
-                await api.remove('custom_contexts', ctx.id);
-                await reload();
-                toast('Contexte retiré.');
-              } catch (e) { fail(e); }
-            }
-          }, '×')))) : el('p', { class: 'muted' }, 'Aucun contexte configuré.')));
+  // Dimensions des photos (réglage en direct)
+  const currentSaisiePx = parseInt(localStorage.getItem('ab_avatar_size_saisie') || '78', 10);
+  const currentRecompensePx = parseInt(localStorage.getItem('ab_avatar_size_recompense') || '90', 10);
 
-    // --- jours speciaux
-    const jour = el('input', { type: 'date', value: api.todayISO() });
-    const mult = el('input', { type: 'number', min: '1.5', max: '5', step: '0.5', value: '2' });
-    const raison = el('input', { type: 'text', placeholder: 'Anniversaire, dernier jour d\'école…' });
-    app.append(el('div', { class: 'card' },
-      el('h2', {}, 'Jours spéciaux'),
-      el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Le multiplicateur double les points gagnés. Il ne double jamais les malus : un jour de fête ne punit pas plus fort.'),
-      el('div', { class: 'fields' }, champ('Date', jour), champ('Multiplicateur', mult), champ('Raison', raison)),
-      el('button', {
-        class: 'btn btn-primary btn-sm', onclick: async () => {
-          try {
-            await api.insert('special_days', {
-              family_id: famille, day: jour.value,
-              multiplier: Number(mult.value), reason: raison.value || 'Jour spécial'
-            });
-            raison.value = ''; await reload(); toast('Jour spécial ajouté.');
-          } catch (e) { fail(e); }
-        }
-      }, 'Ajouter'),
-      special.length ? el('table', { class: 'responsive', style: 'margin-top:14px' },
-        el('thead', {}, el('tr', {}, el('th', {}, 'Date'), el('th', {}, 'Multiplicateur'), el('th', {}, 'Raison'), el('th', {}, ''))),
-        el('tbody', {}, ...special.slice(0, 12).map(s => el('tr', {},
-          el('td', { 'data-th': 'Date' }, api.formatDate(s.day)),
-          el('td', { 'data-th': 'Multiplicateur' }, '×' + s.multiplier),
-          el('td', { 'data-th': 'Raison' }, s.reason),
-          el('td', { 'data-th': '' }, el('button', {
-            class: 'btn btn-sm', onclick: async () => { await api.remove('special_days', s.id); await reload(); }
-          }, 'Retirer')))))) : null));
+  const sliderSaisie = el('input', { type: 'range', min: '50', max: '110', step: '2', value: String(currentSaisiePx), style: 'width:100%;cursor:pointer' });
+  const labelSaisiePx = el('strong', { style: 'color:var(--cyan-d);font-size:1.05rem' }, currentSaisiePx + ' px');
+  const demoSaisieImg = avatar('Bruno', { size: 'xl', title: 'Aperçu Saisie' });
+  demoSaisieImg.style.width = currentSaisiePx + 'px';
+  demoSaisieImg.style.height = currentSaisiePx + 'px';
+
+  sliderSaisie.addEventListener('input', () => {
+    const px = sliderSaisie.value;
+    labelSaisiePx.textContent = px + ' px';
+    demoSaisieImg.style.width = px + 'px';
+    demoSaisieImg.style.height = px + 'px';
+    document.documentElement.style.setProperty('--avatar-size-saisie', px + 'px');
+    localStorage.setItem('ab_avatar_size_saisie', px);
+  });
+
+  const sliderRecompense = el('input', { type: 'range', min: '60', max: '140', step: '2', value: String(currentRecompensePx), style: 'width:100%;cursor:pointer' });
+  const labelRecompensePx = el('strong', { style: 'color:var(--cyan-d);font-size:1.05rem' }, currentRecompensePx + ' px');
+  const demoRecompenseImg = avatar('Bruno', { size: 'xl', title: 'Aperçu Récompenses' });
+  demoRecompenseImg.style.width = currentRecompensePx + 'px';
+  demoRecompenseImg.style.height = currentRecompensePx + 'px';
+
+  sliderRecompense.addEventListener('input', () => {
+    const px = sliderRecompense.value;
+    labelRecompensePx.textContent = px + ' px';
+    demoRecompenseImg.style.width = px + 'px';
+    demoRecompenseImg.style.height = px + 'px';
+    document.documentElement.style.setProperty('--avatar-size-recompense', px + 'px');
+    localStorage.setItem('ab_avatar_size_recompense', px);
+  });
+
+  app.append(el('div', { class: 'card' },
+    el('h2', {}, '📐 Dimensions des photos (réglage en direct)'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' },
+      'Ajuste précisément la taille des photos circulaires. Le changement est immédiat.'),
+    el('div', { style: 'display:grid;gap:16px;margin-top:12px' },
+      el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:12px' },
+        el('div', { style: 'display:flex;justify-content:space-between;margin-bottom:6px' },
+          el('span', {}, 'Photo écran Saisie :'), labelSaisiePx),
+        sliderSaisie,
+        el('div', { style: 'display:flex;justify-content:center;margin-top:10px' }, demoSaisieImg)),
+      el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:12px' },
+        el('div', { style: 'display:flex;justify-content:space-between;margin-bottom:6px' },
+          el('span', {}, 'Photo écran Récompenses :'), labelRecompensePx),
+        sliderRecompense,
+        el('div', { style: 'display:flex;justify-content:center;margin-top:10px' }, demoRecompenseImg)))));
+}
+
+// ---------------------------------------------------------------------
+// RENDU PRINCIPAL
+// ---------------------------------------------------------------------
+function render() {
+  const app = root;
+  app.innerHTML = '';
+  app.append(el('h1', {}, 'Réglages'));
+
+  const themes = [
+    { id: 'crew',       label: '👨‍👩‍👧‍👦 Équipage & Famille' },
+    { id: 'savings',    label: '👛 Portefeuille & Tirelire' },
+    { id: 'categories', label: '📋 Barème & Booster' },
+    { id: 'rewards',    label: '🎁 Récompenses' },
+    { id: 'system',     label: '⚙️ Système' }
+  ];
+
+  app.append(el('div', { class: 'chips', style: 'margin-bottom:14px;overflow-x:auto;padding-bottom:2px' },
+    ...themes.map(t => el('button', {
+      class: 'chip' + (currentTheme === t.id ? ' on' : ''),
+      style: 'font-weight:700',
+      onclick: () => { currentTheme = t.id; render(); }
+    }, t.label))));
+
+  if (currentTheme === 'crew') {
+    renderCrewSection(app);
+  } else if (currentTheme === 'savings') {
+    renderSavingsSection(app);
+  } else if (currentTheme === 'categories') {
+    renderBaremeSection(app);
+  } else if (currentTheme === 'rewards') {
+    renderRewardsSection(app);
+  } else if (currentTheme === 'system') {
+    renderSystemSection(app);
   }
 }
-export async function mount(container, me) {
+
+export async function mount(container, sessionParent) {
   root = container;
-  famille = me.family_id;
-  root.innerHTML = '<p class="muted">Chargement…</p>';
-  try { await reload(); } catch (e) { fail(e); }
+  famille = sessionParent?.family_id || null;
+  root.innerHTML = '<p class="muted">Chargement des réglages…</p>';
+  try {
+    await reload();
+  } catch (e) { fail(e); }
 }
 
 export async function refreshView() {

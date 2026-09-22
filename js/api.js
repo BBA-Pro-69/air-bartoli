@@ -85,6 +85,7 @@ export async function requireSession() {
 const rows = async (q) => { const { data, error } = await q; if (error) throw error; return data || []; };
 
 export const getChildren   = () => rows(sb.from('children').select('*').eq('active', true).order('sort_order'));
+export const getAllChildren = () => rows(sb.from('children').select('*').order('sort_order'));
 export const getCategories = () => rows(sb.from('categories').select('*').eq('active', true).order('sort_order'));
 export const getCategoriesForHistory = () => rows(sb.from('categories').select('*').order('sort_order'));
 export const getRewards    = () => rows(sb.from('rewards').select('*').order('cost'));
@@ -155,6 +156,13 @@ export const deleteCategory = (category_id) => rpc('delete_category', { p_catego
 export const getSavingsSettings = () => sb.from('savings_settings').select('*').maybeSingle().then(r => r.data || { annual_interest_rate: 12.00, active: true });
 export const settleDailyPoints = () => rpc('settle_daily_points', {});
 export const applyMonthlyInterest = () => rpc('apply_monthly_interest', {});
+export const createCrewMember = (email, password, displayName, roleTitle) =>
+  rpc('create_crew_member', { p_email: email, p_password: password, p_display_name: displayName, p_role_title: roleTitle || 'Membre d’équipage' });
+export const removeCrewMember = (userId) =>
+  rpc('remove_crew_member', { p_user_id: userId });
+export const archiveChild = (id) => update('children', id, { active: false });
+export const restoreChild = (id) => update('children', id, { active: true });
+
 
 
 // Tables de parametrage : ecriture directe autorisee par la RLS.
