@@ -669,13 +669,24 @@ async function executeRedemption(r, shares) {
 // ---------------------------------------------------------------------
 // Section « Récompenses acquises » (Historique riche avec filtres & KPIs)
 // ---------------------------------------------------------------------
+function filterDivider(title) {
+  return el('div', {
+    class: 'filter-divider',
+    style: 'display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700'
+  },
+    el('span', { style: 'flex:1;height:1px;background:var(--line)' }),
+    el('span', {}, title),
+    el('span', { style: 'flex:1;height:1px;background:var(--line)' }));
+}
+
 function renderHistorySection(app) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).toISOString().slice(0, 10);
   const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
 
-  const filtered = rewardHistory.filter(e => {
+  // 1. Filtrage de base (enfant, type, période)
+  const baseFiltered = rewardHistory.filter(e => {
     // Filtre enfant
     if (histFilterChild !== 'all' && e.child_id !== histFilterChild) return false;
 
@@ -689,16 +700,33 @@ function renderHistorySection(app) {
     if (histFilterTime === 'quarter' && e.event_date < startOfQuarter) return false;
     if (histFilterTime === 'year' && e.event_date < startOfYear) return false;
 
-    // Filtre récompense spécifique
-    if (histFilterRewardId !== 'all') {
-      const matchId = e.redemptions?.reward_id === histFilterRewardId;
-      const targetReward = rewards.find(r => r.id === histFilterRewardId);
-      const matchNote = targetReward && e.note && e.note.includes(targetReward.label);
-      if (!matchId && !matchNote) return false;
-    }
-
     return true;
   });
+
+  // 2. Récompenses éligibles pour la liste déroulante :
+  // UNIQUEMENT celles qui ont été attribuées au moins une fois correspondant aux autres filtres !
+  const countForReward = r => baseFiltered.filter(e =>
+    e.redemptions?.reward_id === r.id || (e.note && e.note.includes(r.label))
+  ).length;
+
+  const activeAttributedRewards = rewards
+    .map(r => ({ reward: r, count: countForReward(r) }))
+    .filter(item => item.count > 0);
+
+  // Si la récompense sélectionnée n'est plus dans la liste éligible, revenir à 'all'
+  if (histFilterRewardId !== 'all' && !activeAttributedRewards.some(item => item.reward.id === histFilterRewardId)) {
+    histFilterRewardId = 'all';
+  }
+
+  // 3. Filtrage final (avec la récompense spécifique si choisie)
+  const filtered = (histFilterRewardId === 'all')
+    ? baseFiltered
+    : baseFiltered.filter(e => {
+        const targetReward = rewards.find(r => r.id === histFilterRewardId);
+        const matchId = e.redemptions?.reward_id === histFilterRewardId;
+        const matchNote = targetReward && e.note && e.note.includes(targetReward.label);
+        return matchId || matchNote;
+      });
 
   const totalCount = filtered.length;
   let totalPtsWallet = 0;
@@ -709,8 +737,9 @@ function renderHistorySection(app) {
     else totalPtsWallet += ptsVal;
   });
 
-  // Filtres enfants
-  const childChips = el('div', { class: 'chips', style: 'gap:8px;margin-bottom:10px' },
+  // 4. Composants de filtres avec séparateurs nets
+  // Filtre enfants
+  const childChips = el('div', { class: 'chips', style: 'gap:8px;justify-content:center' },
     el('button', {
       class: 'chip' + (histFilterChild === 'all' ? ' on' : ''),
       onclick: () => { histFilterChild = 'all'; render(); }
@@ -727,29 +756,32 @@ function renderHistorySection(app) {
     })
   );
 
-  // Filtres Type & Période
-  const scopeChips = el('div', { class: 'chips', style: 'gap:6px' },
-    el('button', { class: 'chip' + (histFilterScope === 'all' ? ' on' : ''), onclick: () => { histFilterScope = 'all'; render(); } }, 'Tous types'),
+  // Filtre Type
+  const scopeChips = el('div', { class: 'chips', style: 'gap:6px;justify-content:center' },
+    el('button', { class: 'chip' + (histFilterScope === 'all' ? ' on' : ''), onclick: () => { histFilterScope = 'all'; render(); } }, 'Toutes (individuelles & collectives)'),
     el('button', { class: 'chip' + (histFilterScope === 'individual' ? ' on' : ''), onclick: () => { histFilterScope = 'individual'; render(); } }, 'Individuelles 👛'),
     el('button', { class: 'chip' + (histFilterScope === 'collective' ? ' on' : ''), onclick: () => { histFilterScope = 'collective'; render(); } }, 'Collectives 🐷'));
 
-  const timeChips = el('div', { class: 'chips', style: 'gap:6px' },
+  // Filtre Période
+  const timeChips = el('div', { class: 'chips', style: 'gap:6px;justify-content:center' },
     el('button', { class: 'chip' + (histFilterTime === 'all' ? ' on' : ''), onclick: () => { histFilterTime = 'all'; render(); } }, 'Tout l’historique'),
     el('button', { class: 'chip' + (histFilterTime === 'month' ? ' on' : ''), onclick: () => { histFilterTime = 'month'; render(); } }, 'Ce mois-ci'),
     el('button', { class: 'chip' + (histFilterTime === 'quarter' ? ' on' : ''), onclick: () => { histFilterTime = 'quarter'; render(); } }, 'Ce trimestre'),
     el('button', { class: 'chip' + (histFilterTime === 'year' ? ' on' : ''), onclick: () => { histFilterTime = 'year'; render(); } }, 'Cette année'));
 
-  // Sélecteur par récompense spécifique
+  // Sélecteur de récompense contextuel (affiche le nombre correspondant aux autres filtres)
   const rewardOptions = [
-    el('option', { value: 'all' }, '— Toutes les récompenses confondues —'),
-    ...rewards.map(r => el('option', { value: r.id, selected: histFilterRewardId === r.id }, r.label + ' (' + r.cost + ' pts)'))
+    el('option', { value: 'all' }, '— Toutes les récompenses attribuées (' + baseFiltered.length + ') —'),
+    ...activeAttributedRewards.map(item =>
+      el('option', { value: item.reward.id, selected: histFilterRewardId === item.reward.id },
+        item.reward.label + ' (' + item.count + ')'))
   ];
   const rewardSelect = el('select', {
-    style: 'margin-top:6px;font-weight:600',
+    style: 'font-weight:700;font-size:.95rem',
     onchange: e => { histFilterRewardId = e.target.value; render(); }
   }, ...rewardOptions);
 
-  // KPI Header
+  // 5. Carte récapitulative KPI
   const kpiBox = el('div', {
     class: 'card',
     style: 'background:linear-gradient(145deg,#0B2046,#123a74);color:#fff;padding:16px;border-radius:14px;margin-bottom:14px'
@@ -765,12 +797,18 @@ function renderHistorySection(app) {
         el('div', { style: 'font-size:1.6rem;font-weight:900;color:#f0abfc' }, String(totalPtsSavings)),
         el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Pts Tirelire 🐷'))));
 
+  // 6. Assemblage du panneau de filtres avec séparateurs
   app.append(el('div', { class: 'card' },
-    el('h2', {}, 'Historique des récompenses obtenues'),
-    el('p', { class: 'muted', style: 'margin-top:-6px' }, 'Explorez les récompenses accordées selon vos critères.'),
+    el('h2', { style: 'margin:0 0 4px;text-align:center' }, 'Historique des récompenses obtenues'),
+    el('p', { class: 'muted', style: 'margin:0 0 10px;text-align:center' }, 'Affinez l’affichage selon vos critères.'),
+    filterDivider('👤 Bénéficiaire'),
     childChips,
-    el('div', { class: 'row', style: 'gap:10px;margin-bottom:10px;flex-wrap:wrap' }, scopeChips, timeChips),
-    champ('Filtrer sur une récompense spécifique', rewardSelect)
+    filterDivider('🏷️ Type de récompense'),
+    scopeChips,
+    filterDivider('📅 Période'),
+    timeChips,
+    filterDivider('🎯 Récompense spécifique'),
+    rewardSelect
   ));
 
   app.append(kpiBox);
@@ -778,8 +816,8 @@ function renderHistorySection(app) {
   if (filtered.length === 0) {
     app.append(el('div', { class: 'card', style: 'text-align:center;padding:32px 16px' },
       el('div', { style: 'font-size:2rem;margin-bottom:8px' }, '🔍'),
-      el('strong', { style: 'display:block;font-size:1.05rem' }, 'Aucune récompense ne correspond à ces filtres.'),
-      el('p', { class: 'muted', style: 'font-size:.85rem;margin:4px 0 12px' }, 'Essayez d’élargir vos critères ou de sélectionner une autre période.'),
+      el('strong', { style: 'display:block;font-size:1.05rem' }, 'Aucune récompense ne correspond à ces critères.'),
+      el('p', { class: 'muted', style: 'font-size:.85rem;margin:4px 0 12px' }, 'Essayez d’élargir la période ou de réinitialiser vos filtres.'),
       el('button', {
         class: 'btn btn-sm btn-ghost',
         onclick: () => {
