@@ -2,8 +2,8 @@
 //  Ecran Récompenses (🎁) — Air Bartoli
 //  1. Bandeau photo XL, solde total et répartition Portefeuille & Tirelire
 //  2. Sous-onglets : « Individuelles 👛 » & « Collectives 🐷 »
-//  3. Curseurs asservis (Portefeuille vs Tirelire) garantissant la somme exacte
-//  4. Répartition multi-enfants automatique et intelligente (N enfants)
+//  3. Curseurs asservis + saisie numérique directe garantissant la somme exacte
+//  4. Répartition multi-enfants automatique et lissée sans à-coups (N enfants)
 //  5. Historique riche des récompenses acquises avec filtres et KPIs
 // =====================================================================
 import * as api from './api.js';
@@ -37,6 +37,60 @@ function distributePoints(total, n) {
   const base = Math.floor(total / n);
   const rem = total % n;
   return Array.from({ length: n }, (_, i) => i < rem ? base + 1 : base);
+}
+
+// Algorithme d'ajustement lissé des parts sur les autres enfants sans tout faire sauter
+function adjustShares(shares, changedIdx, newVal, total) {
+  const n = shares.length;
+  if (n <= 1) return [total];
+
+  newVal = Math.max(0, Math.min(total, newVal));
+  const res = [...shares];
+  const oldVal = res[changedIdx];
+  const delta = newVal - oldVal;
+  if (delta === 0) return res;
+
+  res[changedIdx] = newVal;
+  const otherIndices = Array.from({ length: n }, (_, i) => i).filter(i => i !== changedIdx);
+
+  if (delta > 0) {
+    let needed = delta;
+    while (needed > 0) {
+      const available = otherIndices.filter(i => res[i] > 0);
+      if (available.length === 0) {
+        res[changedIdx] -= needed;
+        break;
+      }
+      available.sort((a, b) => res[b] - res[a]);
+      for (const idx of available) {
+        if (needed <= 0) break;
+        const take = Math.min(needed, Math.max(1, Math.floor(res[idx] / available.length) || 1));
+        res[idx] -= take;
+        needed -= take;
+      }
+    }
+  } else {
+    let toAdd = -delta;
+    while (toAdd > 0) {
+      for (const idx of otherIndices) {
+        if (toAdd <= 0) break;
+        res[idx] += 1;
+        toAdd -= 1;
+      }
+    }
+  }
+
+  // Ajustement de précision final pour verrouiller la somme exacte
+  const diff = total - res.reduce((s, v) => s + v, 0);
+  if (diff !== 0) {
+    for (const idx of otherIndices) {
+      if (res[idx] + diff >= 0) {
+        res[idx] += diff;
+        break;
+      }
+    }
+  }
+  return res;
 }
 
 async function load() {
@@ -165,7 +219,7 @@ function renderCatalogSection(app) {
     app.append(el('div', { class: 'card' },
       el('h2', {}, 'Récompenses collectives'),
       el('p', { class: 'muted', style: 'margin-top:-6px' },
-        'Projets communs pour toute la fratrie. Vous pouvez moduler la part prélevée sur le portefeuille et la tirelire de chaque enfant.'),
+        'Projets communs pour toute la fratrie. Vous pouvez moduler la part payée par chaque enfant et le choix Portefeuille vs Tirelire.'),
       colRewards.length
         ? el('div', { class: 'rewards' }, ...colRewards.map(r => collectiveCard(r)))
         : el('p', { class: 'muted' }, 'Aucune récompense collective configurée.')));
@@ -236,7 +290,7 @@ function collectiveCard(r) {
 }
 
 // ---------------------------------------------------------------------
-// MODALE INTERACTIVE D'ATTRIBUTION AVEC CURSEURS ASSERVIS
+// MODALE INTERACTIVE D'ATTRIBUTION AVEC CURSEURS & SAISIE ASSERVIS
 // ---------------------------------------------------------------------
 function openAttributionModal(r) {
   const isCollective = r.scope === 'collective';
@@ -249,7 +303,7 @@ function openAttributionModal(r) {
     const sBal = bo.savings_balance ?? 0;
     const totalAvail = wBal + sBal;
 
-    // Pop-up claire si les points totaux sont insuffisants
+    // Pop-up si solde insuffisant
     if (totalAvail < r.cost) {
       const diff = r.cost - totalAvail;
       modal('⚠️ Points insuffisants', el('div', {},
@@ -267,8 +321,7 @@ function openAttributionModal(r) {
       return;
     }
 
-    // Curseur asservi portefeuille <-> tirelire magique
-    // On peut prélever au maximum ce qui est disponible dans chaque stock
+    // Curseur asservi + saisie numérique directe
     const maxWallet = Math.min(r.cost, wBal);
     const minWallet = Math.max(0, r.cost - sBal);
     let initialWallet = Math.min(r.cost, wBal);
@@ -277,21 +330,43 @@ function openAttributionModal(r) {
     let curWallet = initialWallet;
     let curSavings = r.cost - curWallet;
 
+    const inpW = el('input', {
+      type: 'number', min: String(minWallet), max: String(maxWallet), value: String(curWallet),
+      style: 'font-weight:800;font-size:1.15rem;color:var(--cyan-d);width:100px;text-align:center'
+    });
+    const inpS = el('input', {
+      type: 'number', min: String(0), max: String(sBal), value: String(curSavings),
+      style: 'font-weight:800;font-size:1.15rem;color:#a21caf;width:100px;text-align:center'
+    });
+
     const slider = el('input', {
-      type: 'range', min: String(minWallet), max: String(maxWallet), step: '1', value: String(curWallet),
+      type: 'range', class: 'app-slider', min: String(minWallet), max: String(maxWallet), step: '1', value: String(curWallet),
       style: 'width:100%;cursor:pointer;margin:10px 0'
     });
 
-    const badgeW = el('strong', { style: 'font-size:1.25rem;color:var(--cyan-d)' }, curWallet + ' pts');
-    const badgeS = el('strong', { style: 'font-size:1.25rem;color:#a21caf' }, curSavings + ' pts');
-
-    const updateSliderUI = () => {
-      curWallet = Number(slider.value);
+    const syncFromWallet = val => {
+      val = Math.max(minWallet, Math.min(maxWallet, Number(val) || 0));
+      curWallet = val;
       curSavings = r.cost - curWallet;
-      badgeW.textContent = curWallet + ' pts';
-      badgeS.textContent = curSavings + ' pts';
+      slider.value = String(curWallet);
+      inpW.value = String(curWallet);
+      inpS.value = String(curSavings);
     };
-    slider.addEventListener('input', updateSliderUI);
+
+    const syncFromSavings = val => {
+      val = Math.max(0, Math.min(sBal, Number(val) || 0));
+      curSavings = val;
+      curWallet = r.cost - curSavings;
+      if (curWallet > maxWallet) { curWallet = maxWallet; curSavings = r.cost - curWallet; }
+      if (curWallet < minWallet) { curWallet = minWallet; curSavings = r.cost - curWallet; }
+      slider.value = String(curWallet);
+      inpW.value = String(curWallet);
+      inpS.value = String(curSavings);
+    };
+
+    slider.addEventListener('input', () => syncFromWallet(slider.value));
+    inpW.addEventListener('input', () => syncFromWallet(inpW.value));
+    inpS.addEventListener('input', () => syncFromSavings(inpS.value));
 
     const body = el('div', {},
       el('div', { style: 'display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:12px;margin-bottom:14px' },
@@ -301,21 +376,21 @@ function openAttributionModal(r) {
           el('span', { class: 'muted', style: 'font-size:.85rem' },
             'Pour ' + c.first_name + ' · Prix exact : ' + r.cost + ' points'))),
       el('p', { class: 'muted', style: 'font-size:.88rem;margin:0 0 10px' },
-        'Déplacez le curseur pour choisir la répartition exacte. La somme fait automatiquement le montant requis :'),
+        'Glissez le curseur ou saisissez les montants directement : les deux stocks s’ajustent automatiquement pour faire exactement ' + r.cost + ' points.'),
       el('div', { class: 'card', style: 'padding:14px;background:#fff;border:1px solid var(--line);border-radius:12px' },
         el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;margin-bottom:8px' },
-          el('div', { style: 'background:#f0f9ff;border:1px solid #bae6fd;padding:8px;border-radius:10px' },
-            el('div', { style: 'font-size:.76rem;color:var(--muted);font-weight:700' }, 'Prélèvement Portefeuille 👛'),
-            badgeW,
-            el('div', { style: 'font-size:.7rem;color:var(--muted)' }, 'Dispo : ' + wBal + ' pts')),
-          el('div', { style: 'background:#fdf4ff;border:1px solid #f5d0fe;padding:8px;border-radius:10px' },
-            el('div', { style: 'font-size:.76rem;color:var(--muted);font-weight:700' }, 'Prélèvement Tirelire 🐷✨'),
-            badgeS,
-            el('div', { style: 'font-size:.7rem;color:var(--muted)' }, 'Dispo : ' + sBal + ' pts'))),
+          el('div', { style: 'background:#f0f9ff;border:1px solid #bae6fd;padding:10px 8px;border-radius:10px' },
+            el('div', { style: 'font-size:.76rem;color:var(--muted);font-weight:700;margin-bottom:4px' }, 'Part Portefeuille 👛'),
+            inpW,
+            el('div', { style: 'font-size:.7rem;color:var(--muted);margin-top:4px' }, 'Dispo : ' + wBal + ' pts')),
+          el('div', { style: 'background:#fdf4ff;border:1px solid #f5d0fe;padding:10px 8px;border-radius:10px' },
+            el('div', { style: 'font-size:.76rem;color:var(--muted);font-weight:700;margin-bottom:4px' }, 'Part Tirelire 🐷✨'),
+            inpS,
+            el('div', { style: 'font-size:.7rem;color:var(--muted);margin-top:4px' }, 'Dispo : ' + sBal + ' pts'))),
         slider,
         el('div', { style: 'display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted)' },
           el('span', {}, '👛 Max Portefeuille'),
-          el('span', {}, '🐷✨ Max Tirelire Magique'))),
+          el('span', {}, '🐷✨ Max Tirelire'))),
       el('div', { style: 'margin-top:12px;padding:8px 12px;border-radius:10px;background:#f0fdf4;color:var(--green);font-weight:700;text-align:center;font-size:.9rem' },
         '✓ Total vérifié : ' + r.cost + ' points prélevés'));
 
@@ -351,14 +426,13 @@ function openAttributionModal(r) {
     const n = children.length;
     let childShares = distributePoints(r.cost, n);
 
-    // Pour chaque enfant, on retient sa part portefeuille et tirelire
-    // Par défaut pour une sortie collective : 100% sur la Tirelire Magique (ou max disponible)
     const kidsData = children.map((c, i) => {
       const bo = balances.find(x => x.child_id === c.id) || {};
       const wBal = bo.wallet_balance ?? 0;
       const sBal = bo.savings_balance ?? 0;
       const share = childShares[i];
 
+      // Par défaut pour une sortie collective : 100% sur la Tirelire Magique (ou max dispo)
       const sPts = Math.min(share, sBal);
       const wPts = share - sPts;
 
@@ -367,12 +441,14 @@ function openAttributionModal(r) {
         wBal, sBal,
         share,
         wPts, sPts,
-        // Éléments DOM
+        // Éléments DOM Étape 1
         shareSlider: null,
-        shareBadge: null,
+        shareInput: null,
+        // Éléments DOM Étape 2
+        partTitle: null,
         walletSlider: null,
-        wBadge: null,
-        sBadge: null
+        wInput: null,
+        sInput: null
       };
     });
 
@@ -380,14 +456,19 @@ function openAttributionModal(r) {
       el('div', { style: 'padding:12px;background:#f8fafc;border-radius:12px;margin-bottom:12px' },
         el('strong', { style: 'font-size:1.15rem;display:block' }, r.label),
         el('span', { class: 'muted', style: 'font-size:.85rem' },
-          'Sortie collective · Prix total verrouillé : ' + r.cost + ' points')),
-      el('h4', { style: 'margin:14px 0 6px;color:var(--navy)' }, '1. Répartition de la facture entre les enfants :'),
+          'Sortie collective · Prix total : ' + r.cost + ' points')),
+      el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px' },
+        el('h4', { style: 'margin:0;color:var(--navy)' }, '1. Répartition de la facture entre les enfants :'),
+        el('button', {
+          type: 'button', class: 'btn btn-sm btn-ghost', style: 'font-size:.76rem;font-weight:700',
+          onclick: () => resetEquitable()
+        }, '⚡ Répartir équitablement')),
       el('p', { class: 'muted', style: 'font-size:.82rem;margin:0 0 10px' },
-        'Glissez le curseur d’un enfant pour modifier sa part. La différence se reporte automatiquement et équitablement sur les autres !'),
+        'Saisissez les parts ou bougez les curseurs : la compensation se fait en douceur sur les autres sans à-coups !'),
       el('div', { id: 'sharesContainer', style: 'display:grid;gap:12px' }),
-      el('h4', { style: 'margin:18px 0 6px;color:#a21caf' }, '2. Prélèvement pour chaque enfant (Portefeuille vs Tirelire) :'),
+      el('h4', { style: 'margin:20px 0 6px;color:#a21caf' }, '2. Prélèvement pour chaque enfant (Portefeuille vs Tirelire) :'),
       el('p', { class: 'muted', style: 'font-size:.82rem;margin:0 0 10px' },
-        'Par défaut, 100 % de la sortie collective est pris sur la Tirelire Magique 🐷✨. Déplacez le curseur individuel si vous souhaitez utiliser du Portefeuille 👛.'),
+        'Par défaut, 100 % de la sortie collective est pris sur la Tirelire Magique 🐷✨. Vous pouvez basculer des points sur le Portefeuille 👛 à votre guise.'),
       el('div', { id: 'walletSlidersContainer', style: 'display:grid;gap:12px' }),
       el('div', { style: 'margin-top:14px;padding:10px 12px;border-radius:10px;background:#f0fdf4;color:var(--green);font-weight:700;text-align:center' },
         '✓ Facture collective couverte à 100 % (' + r.cost + ' points)'));
@@ -395,28 +476,32 @@ function openAttributionModal(r) {
     const sharesContainer = body.querySelector('#sharesContainer');
     const walletContainer = body.querySelector('#walletSlidersContainer');
 
-    // Mettre à jour l'asservissement collectif
+    // Réinitialiser équitablement
+    const resetEquitable = () => {
+      childShares = distributePoints(r.cost, n);
+      syncUI();
+    };
+
+    // Mettre à jour l'asservissement collectif lissé
     const updateAllShares = (changedIdx, newVal) => {
-      newVal = Math.max(0, Math.min(r.cost, newVal));
-      childShares[changedIdx] = newVal;
-      const remaining = r.cost - newVal;
+      childShares = adjustShares(childShares, changedIdx, newVal, r.cost);
+      syncUI();
+    };
 
-      // Répartir le reste sur les autres enfants
-      const otherIndices = Array.from({ length: n }, (_, idx) => idx).filter(idx => idx !== changedIdx);
-      if (otherIndices.length > 0) {
-        const subParts = distributePoints(remaining, otherIndices.length);
-        otherIndices.forEach((otherIdx, j) => {
-          childShares[otherIdx] = subParts[j];
-        });
-      }
-
-      // Synchroniser les sliders de parts et recalculer la ventilation portefeuille/tirelire
+    const syncUI = () => {
       kidsData.forEach((kd, idx) => {
         kd.share = childShares[idx];
-        if (kd.shareSlider) kd.shareSlider.value = String(kd.share);
-        if (kd.shareBadge) kd.shareBadge.textContent = kd.share + ' pts';
 
-        // Re-ventiler portefeuille vs tirelire pour sa nouvelle part
+        // Sync Étape 1
+        if (kd.shareSlider) kd.shareSlider.value = String(kd.share);
+        if (kd.shareInput) kd.shareInput.value = String(kd.share);
+
+        // Sync Étape 2 (Dynamique et réactif !)
+        if (kd.partTitle) {
+          kd.partTitle.textContent = kd.child.first_name + ' (part : ' + kd.share + ' pts) :';
+        }
+
+        // Re-ventiler par défaut vers la tirelire magique
         const defS = Math.min(kd.share, kd.sBal);
         const defW = Math.max(0, kd.share - defS);
         kd.sPts = defS;
@@ -432,67 +517,116 @@ function openAttributionModal(r) {
           kd.sPts = kd.share - kd.wPts;
           kd.walletSlider.value = String(kd.wPts);
         }
-        if (kd.wBadge) kd.wBadge.textContent = '👛 ' + kd.wPts + ' pts';
-        if (kd.sBadge) kd.sBadge.textContent = '🐷✨ ' + kd.sPts + ' pts';
+        if (kd.wInput) {
+          kd.wInput.max = String(Math.min(kd.share, kd.wBal));
+          kd.wInput.value = String(kd.wPts);
+        }
+        if (kd.sInput) {
+          kd.sInput.max = String(Math.min(kd.share, kd.sBal));
+          kd.sInput.value = String(kd.sPts);
+        }
       });
     };
 
-    // Construire le panneau Étape 1 : Part de chaque enfant
+    // Construire Étape 1
     kidsData.forEach((kd, idx) => {
       const slider = el('input', {
-        type: 'range', min: '0', max: String(r.cost), step: '1', value: String(kd.share),
-        style: 'width:100%;cursor:pointer'
+        type: 'range', class: 'app-slider', min: '0', max: String(r.cost), step: '1', value: String(kd.share),
+        style: 'width:100%;cursor:pointer;margin:6px 0'
       });
-      const badge = el('strong', { style: 'font-size:1.1rem;color:var(--navy)' }, kd.share + ' pts');
+      const numInput = el('input', {
+        type: 'number', min: '0', max: String(r.cost), value: String(kd.share),
+        style: 'width:80px;font-weight:800;font-size:1.1rem;color:var(--navy);text-align:center'
+      });
 
       kd.shareSlider = slider;
-      kd.shareBadge = badge;
+      kd.shareInput = numInput;
 
-      slider.addEventListener('input', () => {
-        updateAllShares(idx, Number(slider.value));
-      });
+      slider.addEventListener('input', () => updateAllShares(idx, Number(slider.value)));
+      numInput.addEventListener('input', () => updateAllShares(idx, Number(numInput.value)));
 
-      sharesContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff' },
-        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px' },
+      const quickBtn = (delta, text) => el('button', {
+        type: 'button', class: 'btn btn-sm btn-ghost',
+        style: 'font-size:.72rem;padding:2px 6px;border:1px solid var(--line)',
+        onclick: () => updateAllShares(idx, kd.share + delta)
+      }, text);
+
+      sharesContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff' },
+        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px' },
           el('div', { style: 'display:flex;align-items:center;gap:8px' },
             avatar(kd.child.first_name, { size: 'xs', customSrc: kd.child.avatar }),
             el('strong', {}, kd.child.first_name)),
-          badge),
+          el('div', { style: 'display:flex;align-items:center;gap:6px' },
+            quickBtn(-50, '-50'), quickBtn(-10, '-10'),
+            numInput,
+            quickBtn(10, '+10'), quickBtn(50, '+50'))),
         slider));
     });
 
-    // Construire le panneau Étape 2 : Choix Portefeuille vs Tirelire par enfant
+    // Construire Étape 2 (Totalement synchronisée en direct avec l'Étape 1 !)
     kidsData.forEach((kd) => {
+      const partTitle = el('strong', {}, kd.child.first_name + ' (part : ' + kd.share + ' pts) :');
+      kd.partTitle = partTitle;
+
       const maxW = Math.min(kd.share, kd.wBal);
       const minW = Math.max(0, kd.share - kd.sBal);
 
       const wSlider = el('input', {
-        type: 'range', min: String(minW), max: String(maxW), step: '1', value: String(kd.wPts),
+        type: 'range', class: 'app-slider', min: String(minW), max: String(maxW), step: '1', value: String(kd.wPts),
         style: 'width:100%;cursor:pointer;margin:6px 0'
       });
 
-      const wB = el('span', { style: 'background:#f0f9ff;color:var(--cyan-d);padding:2px 8px;border-radius:6px;border:1px solid #bae6fd;font-weight:700' }, '👛 ' + kd.wPts + ' pts');
-      const sB = el('span', { style: 'background:#fdf4ff;color:#a21caf;padding:2px 8px;border-radius:6px;border:1px solid #f5d0fe;font-weight:700' }, '🐷✨ ' + kd.sPts + ' pts');
-
-      kd.walletSlider = wSlider;
-      kd.wBadge = wB;
-      kd.sBadge = sB;
-
-      wSlider.addEventListener('input', () => {
-        kd.wPts = Number(wSlider.value);
-        kd.sPts = kd.share - kd.wPts;
-        wB.textContent = '👛 ' + kd.wPts + ' pts';
-        sB.textContent = '🐷✨ ' + kd.sPts + ' pts';
+      const wInp = el('input', {
+        type: 'number', min: String(minW), max: String(maxW), value: String(kd.wPts),
+        style: 'width:70px;text-align:center;font-weight:700;color:var(--cyan-d)'
+      });
+      const sInp = el('input', {
+        type: 'number', min: '0', max: String(Math.min(kd.share, kd.sBal)), value: String(kd.sPts),
+        style: 'width:70px;text-align:center;font-weight:700;color:#a21caf'
       });
 
-      walletContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff' },
-        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px' },
-          el('span', { style: 'font-weight:700' }, kd.child.first_name + ' (part : ' + kd.share + ' pts) :'),
-          el('div', { style: 'display:flex;gap:6px;font-size:.82rem' }, wB, sB)),
+      kd.walletSlider = wSlider;
+      kd.wInput = wInp;
+      kd.sInput = sInp;
+
+      const syncKidStocks = (fromW) => {
+        if (fromW) {
+          let val = Math.max(minW, Math.min(maxW, Number(wInp.value) || 0));
+          kd.wPts = val;
+          kd.sPts = kd.share - kd.wPts;
+        } else {
+          let val = Math.max(0, Math.min(kd.sBal, Number(sInp.value) || 0));
+          kd.sPts = val;
+          kd.wPts = kd.share - kd.sPts;
+          if (kd.wPts > maxW) { kd.wPts = maxW; kd.sPts = kd.share - kd.wPts; }
+          if (kd.wPts < minW) { kd.wPts = minW; kd.sPts = kd.share - kd.wPts; }
+        }
+        wSlider.value = String(kd.wPts);
+        wInp.value = String(kd.wPts);
+        sInp.value = String(kd.sPts);
+      };
+
+      wSlider.addEventListener('input', () => {
+        wInp.value = wSlider.value;
+        syncKidStocks(true);
+      });
+      wInp.addEventListener('input', () => syncKidStocks(true));
+      sInp.addEventListener('input', () => syncKidStocks(false));
+
+      walletContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff' },
+        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px' },
+          partTitle,
+          el('div', { style: 'display:flex;gap:6px;font-size:.76rem;color:var(--muted)' },
+            '👛 ' + kd.wBal + ' | 🐷 ' + kd.sBal)),
+        el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;margin-bottom:6px' },
+          el('div', { style: 'background:#f0f9ff;border:1px solid #bae6fd;padding:6px;border-radius:8px' },
+            el('label', { style: 'font-size:.74rem;display:block;margin-bottom:2px' }, 'Portefeuille 👛'), wInp),
+          el('div', { style: 'background:#fdf4ff;border:1px solid #f5d0fe;padding:6px;border-radius:8px' },
+            el('label', { style: 'font-size:.74rem;display:block;margin-bottom:2px' }, 'Tirelire 🐷✨'), sInp)),
         wSlider,
-        el('div', { style: 'display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted)' },
-          el('span', {}, '👛 Tout Portefeuille'),
-          el('span', {}, '🐷✨ Tout Tirelire Magique'))));
+        el('div', { style: 'display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted)' },
+          el('span', {}, '👛 Max Portefeuille'),
+          el('span', {}, '🐷✨ Max Tirelire Magique'))));
     });
 
     const { close } = modal('Sortie collective : ' + r.label, body, [{
