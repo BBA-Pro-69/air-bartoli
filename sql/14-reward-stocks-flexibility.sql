@@ -1,9 +1,10 @@
 -- =====================================================================
--- Air Bartoli - Migration 14 : Flexibilité d'attribution des récompenses
--- 1. Choix du stock (Portefeuille vs Tirelire Magique) par enfant.
--- 2. Colonne default_savings_pct pour persister le réglage global d'épargne.
--- 3. Fonctions RPC update_crew_member et remove_crew_member pour tous les adultes.
--- 4. Prise en compte de 'adjustment' dans v_child_balance.
+-- Air Bartoli - Migration 14 : Flexibilité récompenses & équipage complet
+-- 1. Colonnes wallet_points et savings_points dans redemption_shares.
+-- 2. Colonne default_savings_pct dans savings_settings.
+-- 3. Fonctions request_redemption et approve_redemption avec répartition par stock.
+-- 4. Fonctions create_crew_member (avec auth.identities) et remove_crew_member.
+-- 5. Fonction get_crew_login_profiles() pour l'écran de connexion dynamique.
 -- =====================================================================
 
 begin;
@@ -109,7 +110,6 @@ begin
       raise exception 'Solde Tirelire Magique insuffisant : % pts requis, % disponibles.', v_s.savings_points, coalesce(v_sbal, 0);
     end if;
 
-    -- Débit du portefeuille si part > 0
     if coalesce(v_s.wallet_points, 0) > 0 then
       insert into events (family_id, child_id, category_id, event_date, day_part,
                           kind, base_points, multiplier, counts_status, note, wallet_target, redemption_id, created_by)
@@ -117,7 +117,6 @@ begin
               -v_s.wallet_points, 1, false, 'Echange : ' || v_r.label || ' [Portefeuille]', 'wallet', v_red.id, auth.uid());
     end if;
 
-    -- Débit de la tirelire si part > 0
     if coalesce(v_s.savings_points, 0) > 0 then
       insert into events (family_id, child_id, category_id, event_date, day_part,
                           kind, base_points, multiplier, counts_status, note, wallet_target, redemption_id, created_by)
@@ -136,7 +135,7 @@ begin
 end;
 $$;
 
--- [5] Mise à jour de cancel_redemption pour restituer les points dans le bon stock
+-- [5] Mise à jour de cancel_redemption
 create or replace function public.cancel_redemption(p_redemption_id uuid, p_reason text default null)
 returns redemptions
 language plpgsql
@@ -144,7 +143,7 @@ security definer
 set search_path to 'public'
 as $$
 declare
-  v_family uuid := auth_family_id();
+  v_family uuid := coalesce(auth_family_id(), (select family_id from redemptions where id = p_redemption_id));
   v_red    redemptions;
   v_r      rewards;
   v_ev     record;
@@ -162,7 +161,7 @@ begin
       values (v_family, v_ev.child_id, null, (now() at time zone 'Europe/Paris')::date, v_ev.day_part,
               'reversal', abs(v_ev.points), 1, false,
               coalesce(p_reason, 'Annulation de recompense : ' || coalesce(v_r.label, '')),
-              v_ev.wallet_target, v_ev.id, auth.uid());
+              v_ev.wallet_target, v_ev.id, coalesce(auth.uid(), v_ev.created_by));
     end if;
   end loop;
 
@@ -171,7 +170,7 @@ begin
   end if;
 
   update redemptions
-  set state = 'cancelled', decided_by = auth.uid(), decided_at = now()
+  set state = 'cancelled', decided_by = coalesce(auth.uid(), v_red.decided_by), decided_at = now()
   where id = v_red.id
   returning * into v_red;
 
@@ -179,45 +178,97 @@ begin
 end;
 $$;
 
--- [6] Fonctions update_crew_member et remove_crew_member
-create or replace function public.update_crew_member(
-  p_user_id      uuid,
-  p_display_name text,
-  p_role_title   text default null,
-  p_avatar_url   text default null,
-  p_email        text default null
+-- [6] Fonction pour l'écran de connexion dynamique
+create or replace function public.get_crew_login_profiles()
+returns table (
+  user_id uuid,
+  display_name text,
+  role_title text,
+  avatar_url text,
+  is_admin boolean,
+  email text
 )
-returns boolean
+language sql
+security definer
+set search_path to 'public'
+as $$
+  select
+    user_id,
+    display_name,
+    coalesce(role_title, case when is_admin then 'Parent' else 'Membre d''équipage' end) as role_title,
+    avatar_url,
+    is_admin,
+    email
+  from parents
+  order by is_admin desc, created_at asc;
+$$;
+
+grant execute on function public.get_crew_login_profiles() to anon, authenticated;
+
+-- [7] Fonctions create_crew_member (avec auth.identities) et remove_crew_member
+create or replace function public.create_crew_member(
+  p_email text,
+  p_password text,
+  p_display_name text,
+  p_role_title text default 'Membre d''équipage'
+)
+returns jsonb
 language plpgsql
 security definer
-set search_path to 'public', 'auth'
+set search_path to 'public', 'auth', 'extensions'
 as $$
 declare
-  v_family_id uuid := auth_family_id();
-  v_is_admin  boolean;
+  v_family_id   uuid := auth_family_id();
+  v_is_admin    boolean;
+  v_user_id     uuid;
+  v_clean_email text := lower(trim(p_email));
 begin
   if v_family_id is null then
     raise exception 'Utilisateur non authentifié.';
   end if;
   select is_admin into v_is_admin from parents where user_id = auth.uid();
-  if not coalesce(v_is_admin, false) and p_user_id != auth.uid() then
-    raise exception 'Seuls les administrateurs peuvent modifier les autres membres.';
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Seuls les administrateurs peuvent inviter des membres d''équipage.';
   end if;
 
-  update public.parents
-  set
-    display_name = coalesce(trim(p_display_name), display_name),
-    role_title   = coalesce(trim(p_role_title), role_title),
-    avatar_url   = case when p_avatar_url is not null then p_avatar_url else avatar_url end,
-    email        = coalesce(lower(trim(p_email)), email)
-  where user_id = p_user_id and family_id = v_family_id;
+  select id into v_user_id from auth.users where email = v_clean_email;
+  if v_user_id is not null then
+    raise exception 'Un compte avec cette adresse email existe déjà.';
+  end if;
 
-  return true;
+  v_user_id := gen_random_uuid();
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_user_id, 'authenticated', 'authenticated',
+    v_clean_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('display_name', trim(p_display_name)),
+    now(), now()
+  );
+
+  insert into auth.identities (
+    id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_user_id, v_user_id,
+    jsonb_build_object('sub', v_user_id, 'email', v_clean_email, 'email_verified', true, 'phone_verified', false),
+    'email', now(), now(), now()
+  );
+
+  insert into public.parents (
+    user_id, family_id, display_name, is_admin, role_title, email
+  ) values (
+    v_user_id, v_family_id, trim(p_display_name), false, coalesce(p_role_title, 'Membre d''équipage'), v_clean_email
+  );
+
+  return jsonb_build_object('user_id', v_user_id, 'display_name', p_display_name, 'role_title', p_role_title, 'email', v_clean_email);
 end;
 $$;
 
-revoke execute on function public.update_crew_member(uuid, text, text, text, text) from anon, public;
-grant execute on function public.update_crew_member(uuid, text, text, text, text) to authenticated;
+revoke execute on function public.create_crew_member(text, text, text, text) from anon, public;
+grant execute on function public.create_crew_member(text, text, text, text) to authenticated;
 
 create or replace function public.remove_crew_member(p_user_id uuid)
 returns boolean
@@ -245,6 +296,7 @@ begin
     raise exception 'Membre introuvable dans cette famille.';
   end if;
 
+  delete from auth.identities where user_id = p_user_id;
   delete from public.parents where user_id = p_user_id and family_id = v_family_id;
   delete from auth.users where id = p_user_id;
   return true;
@@ -253,102 +305,5 @@ $$;
 
 revoke execute on function public.remove_crew_member(uuid) from anon, public;
 grant execute on function public.remove_crew_member(uuid) to authenticated;
-
--- [7] Vue v_child_balance avec prise en compte des ajustements dans chaque stock
-drop view if exists public.v_reward_eligibility cascade;
-drop view if exists public.v_child_balance cascade;
-
-create view public.v_child_balance with (security_invoker = on) as
-with today_d as (
-  select (now() at time zone 'Europe/Paris')::date as d
-),
-settled as (
-  select
-    ds.child_id,
-    coalesce(sum(ds.wallet_points), 0)::integer as wallet_from_days,
-    coalesce(sum(ds.savings_points), 0)::integer as savings_from_days
-  from daily_settlements ds
-  group by ds.child_id
-),
-rewards_and_interest as (
-  select
-    e.child_id,
-    coalesce(sum(e.points) filter (
-      where (e.kind = 'reward' and coalesce(e.wallet_target, 'wallet') = 'wallet')
-         or (e.kind = 'reversal' and exists (
-               select 1 from events r where r.id = e.reverses_id and r.kind = 'reward' and coalesce(r.wallet_target, 'wallet') = 'wallet'
-            ))
-         or (e.kind in ('booster', 'bonus_streak', 'adjustment') and coalesce(e.wallet_target, 'wallet') = 'wallet' and not exists (
-               select 1 from events rev where rev.reverses_id = e.id
-            ))
-    ), 0)::integer as wallet_extras,
-    coalesce(sum(e.points) filter (
-      where e.kind = 'interest'
-         or (e.kind = 'reward' and e.wallet_target = 'savings')
-         or (e.kind = 'reversal' and exists (
-               select 1 from events r where r.id = e.reverses_id and r.kind = 'reward' and r.wallet_target = 'savings'
-            ))
-         or (e.kind in ('booster', 'bonus_streak', 'adjustment') and e.wallet_target = 'savings' and not exists (
-               select 1 from events rev where rev.reverses_id = e.id
-            ))
-    ), 0)::integer as savings_extras
-  from events e
-  where e.child_id is not null
-  group by e.child_id
-),
-today_pending_calc as (
-  select
-    e.child_id,
-    greatest(0, coalesce(sum(e.points) filter (
-      where e.kind in ('bonus', 'malus', 'repair')
-         or (e.kind = 'reversal' and e.points < 0)
-         or (e.kind = 'reversal' and e.points > 0 and exists (select 1 from events orig where orig.id = e.reverses_id and orig.kind = 'malus'))
-    ), 0))::integer as today_pending
-  from events e, today_d td
-  where e.child_id is not null
-    and e.event_date = td.d
-  group by e.child_id
-)
-select
-  c.id as child_id,
-  c.family_id,
-  c.first_name,
-  (greatest(0, coalesce(s.wallet_from_days, 0) + coalesce(ri.wallet_extras, 0)) +
-   greatest(0, coalesce(s.savings_from_days, 0) + coalesce(ri.savings_extras, 0)))::integer as balance,
-  greatest(0, coalesce(s.wallet_from_days, 0) + coalesce(ri.wallet_extras, 0))::integer as wallet_balance,
-  greatest(0, coalesce(s.savings_from_days, 0) + coalesce(ri.savings_extras, 0))::integer as savings_balance,
-  coalesce(tp.today_pending, 0)::integer as today_pending,
-  coalesce(c.savings_pct, 70)::integer as savings_pct
-from children c
-left join settled s on s.child_id = c.id
-left join rewards_and_interest ri on ri.child_id = c.id
-left join today_pending_calc tp on tp.child_id = c.id;
-
-create view public.v_reward_eligibility with (security_invoker = on) as
-select
-  r.id as reward_id,
-  r.family_id,
-  r.label,
-  r.scope,
-  r.cost,
-  r.min_per_child,
-  b.child_id,
-  b.first_name,
-  b.balance,
-  b.wallet_balance,
-  b.savings_balance,
-  greatest(r.min_per_child - b.savings_balance, 0) as missing_for_min,
-  greatest(case when r.scope = 'individual' then r.cost - b.wallet_balance else 0 end, 0) as missing_individual,
-  case
-    when coalesce(rt.weekly_rate, 0) = 0 then null::integer
-    else ceil(
-      greatest(case when r.scope = 'individual' then r.cost - b.wallet_balance else r.min_per_child - b.savings_balance end, 0)::numeric
-      / (rt.weekly_rate::numeric / 7.0)
-    )::integer
-  end as days_left
-from rewards r
-join v_child_balance b on b.family_id = r.family_id
-left join v_child_rate rt on rt.child_id = b.child_id
-where r.active;
 
 commit;

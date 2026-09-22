@@ -183,13 +183,14 @@ export const getRedemptionsHistory = () => rows(
 );
 export const getRewardRedemptions = getRedemptionsHistory;
 
-export const updateCrewMember = (userId, displayName, roleTitle = null, avatarUrl = null, email = null) =>
+export const updateCrewMember = (userId, displayName, roleTitle = null, avatarUrl = null, email = null, active = null) =>
   rpc('update_crew_member', {
     p_user_id: userId,
     p_display_name: displayName,
     p_role_title: roleTitle || null,
     p_avatar_url: avatarUrl || null,
-    p_email: email || null
+    p_email: email || null,
+    p_active: active !== null ? active : null
   });
 
 export const archiveChild = (id) => update('children', id, { active: false });

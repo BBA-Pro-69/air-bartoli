@@ -350,9 +350,25 @@ function renderCrewSection(app) {
                 el('span', {
                   class: 'badge',
                   style: isAdmin ? 'background:#e0f2fe;color:var(--cyan-d);font-size:.72rem' : 'background:#f1f5f9;color:var(--muted);font-size:.72rem'
-                }, isAdmin ? '★ Parent Admin' : (p.role_title || 'Membre d’équipage'))),
+                }, isAdmin ? '★ Parent Admin' : (p.role_title || 'Membre d’équipage')),
+                p.active === false ? el('span', {
+                  class: 'badge', style: 'background:#fee2e2;color:#991b1b;font-size:.72rem'
+                }, 'Masqué à la connexion') : null),
               el('span', { class: 'muted', style: 'font-size:.8rem' }, p.email || 'Email non renseigné'))),
           el('div', { class: 'row', style: 'gap:6px' },
+            !isMe ? el('button', {
+              class: 'btn btn-sm ' + (p.active !== false ? 'btn-ghost' : 'btn-primary'),
+              style: 'font-size:.76rem;padding:2px 8px',
+              title: p.active !== false ? 'Masquer de l’écran de connexion' : 'Rendre visible à la connexion',
+              onclick: async () => {
+                try {
+                  const newAct = !(p.active !== false);
+                  await api.updateCrewMember(p.user_id, p.display_name, p.role_title, null, p.email, newAct);
+                  await reload();
+                  toast(p.display_name + (newAct ? ' visible sur l’écran de connexion !' : ' masqué de l’écran de connexion.'));
+                } catch (e) { fail(e); }
+              }
+            }, p.active !== false ? 'Désactiver' : 'Réactiver') : null,
             el('button', {
               class: 'btn btn-sm',
               onclick: () => openEditCrewModal(p)
@@ -360,10 +376,10 @@ function renderCrewSection(app) {
             !isMe ? el('button', {
               class: 'btn btn-sm btn-ghost', style: 'color:var(--red)',
               onclick: async () => {
-                if (!window.confirm('Supprimer ' + p.display_name + ' de l’équipage ?\n\nSon accès sera immédiatement révoqué.')) return;
+                if (!window.confirm('Supprimer définitivement ' + p.display_name + ' de l’équipage ?\n\nSon compte et ses identifiants seront supprimés.')) return;
                 try {
                   await api.removeCrewMember(p.user_id);
-                  await reload(); toast(p.display_name + ' retiré de l’équipage.');
+                  await reload(); toast(p.display_name + ' supprimé.');
                 } catch (e) { fail(e); }
               }
             }, 'Supprimer') : null));
@@ -373,14 +389,23 @@ function renderCrewSection(app) {
 }
 
 function openEditCrewModal(p) {
+  const isMe = p.user_id === me?.user_id;
   const nameInput = el('input', { type: 'text', value: p.display_name || '', required: true });
   const roleInput = el('input', { type: 'text', value: p.role_title || (p.is_admin ? 'Parent' : 'Membre d’équipage') });
   const emailInput = el('input', { type: 'email', value: p.email || '' });
+  const activeCheck = el('input', {
+    type: 'checkbox', style: 'width:auto;min-height:auto', checked: p.active !== false,
+    disabled: isMe
+  });
 
   const body = el('div', {},
     champ('Prénom / Nom d’usage', nameInput),
     champ('Rôle affiché', roleInput),
-    champ('Adresse email', emailInput));
+    champ('Adresse email', emailInput),
+    el('label', { class: 'row', style: 'gap:8px;cursor:' + (isMe ? 'not-allowed' : 'pointer') + ';margin-top:10px' },
+      activeCheck,
+      el('span', { style: 'font-weight:600;color:var(--ink)' }, 'Profil actif (visible sur l’écran de connexion)')),
+    isMe ? el('p', { class: 'muted', style: 'font-size:.78rem;margin:4px 0 0' }, 'Vous ne pouvez pas désactiver votre propre compte administrateur.') : null);
 
   modal('Modifier le profil de ' + p.display_name, body, [{
     label: 'Enregistrer', class: 'btn-primary',
@@ -388,7 +413,7 @@ function openEditCrewModal(p) {
       try {
         const name = nameInput.value.trim();
         if (!name) throw new Error('Le prénom est obligatoire.');
-        await api.updateCrewMember(p.user_id, name, roleInput.value.trim(), null, emailInput.value.trim());
+        await api.updateCrewMember(p.user_id, name, roleInput.value.trim(), null, emailInput.value.trim(), isMe ? null : activeCheck.checked);
         close(); await reload(); toast('Profil mis à jour !');
       } catch (e) { fail(e); }
     }
