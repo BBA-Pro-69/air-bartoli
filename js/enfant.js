@@ -3,7 +3,7 @@
 //  1. Bandeau photo XL, solde total et répartition Portefeuille & Tirelire
 //  2. Sous-onglets : « Individuelles 👛 » & « Collectives 🐷 »
 //  3. Choix précis du stock de prélèvement (Portefeuille vs Tirelire) par enfant
-//  4. Historique des récompenses acquises avec annulation
+//  4. Historique riche des récompenses acquises avec filtres (enfant, type, temps, récompense)
 // =====================================================================
 import * as api from './api.js';
 import { el, pts, toast, fail, modal, gauge, undoBar, avatar } from './ui.js';
@@ -15,16 +15,26 @@ let current = null;
 let mainSection = 'catalog'; // 'catalog' | 'history'
 let currentTab = 'individual'; // 'individual' | 'collective'
 
+// Filtres pour l'historique des récompenses acquises
+let histFilterChild = 'all'; // 'all' | child_id
+let histFilterScope = 'all'; // 'all' | 'individual' | 'collective'
+let histFilterTime  = 'all'; // 'all' | 'month' | 'quarter' | 'year'
+let histFilterRewardId = 'all'; // 'all' | reward_id
+
 const bal   = id => (balances.find(b => b.child_id === id) || {}).balance ?? 0;
 const rate  = id => (rates.find(r => r.child_id === id) || {}).weekly_rate ?? 0;
 const level = id => levels.find(l => l.child_id === id) || {};
 const kid   = id => children.find(c => c.id === id) || {};
 
+function champ(label, input) {
+  return el('div', { class: 'field' }, el('label', {}, label), input);
+}
+
 async function load() {
   const [c, lv, b, rw, elg, rt, evs] = await Promise.all([
     api.getChildren(), api.getLevels(), api.getBalances(),
     api.getRewards(), api.getEligibility(), api.getRates(),
-    api.getEvents(120)
+    api.getEvents(200)
   ]);
   children = c.filter(k => k.active !== false);
   levels = lv;
@@ -33,8 +43,9 @@ async function load() {
   elig = elg;
   rates = rt;
 
+  // Exclusion stricte des récompenses annulées (reverses_id existant ou state=cancelled)
   const reversedIds = new Set(evs.filter(e => e.reverses_id).map(e => e.reverses_id));
-  rewardHistory = evs.filter(e => e.kind === 'reward' && !reversedIds.has(e.id));
+  rewardHistory = evs.filter(e => e.kind === 'reward' && !reversedIds.has(e.id) && e.redemptions?.state !== 'cancelled');
 
   if (!current || !children.some(k => k.id === current)) {
     current = children[0]?.id;
@@ -69,7 +80,7 @@ function render() {
 
   // Bandeau synthétique : photo XL, solde total et répartition Portefeuille / Tirelire Magique
   const balObj = balances.find(x => x.child_id === current) || {};
-  const walletPts = balObj.wallet_balance ?? b;
+  const walletPts = balObj.wallet_balance ?? 0;
   const savingsPts = balObj.savings_balance ?? 0;
   const todayPending = balObj.today_pending ?? 0;
 
@@ -222,11 +233,29 @@ function openAttributionModal(r) {
   const isCollective = r.scope === 'collective';
 
   if (!isCollective) {
-    // Cas individuel : pour l'enfant sélectionné
     const c = kid(current);
     const bo = balances.find(x => x.child_id === current) || {};
     const wBal = bo.wallet_balance ?? 0;
     const sBal = bo.savings_balance ?? 0;
+    const totalAvail = wBal + sBal;
+
+    // Pop-up si solde insuffisant
+    if (totalAvail < r.cost) {
+      const diff = r.cost - totalAvail;
+      modal('⚠️ Points insuffisants', el('div', {},
+        el('div', { style: 'text-align:center;margin-bottom:12px' },
+          avatar(c.first_name, { size: 'lg', customSrc: c.avatar, title: c.first_name }),
+          el('h3', { style: 'margin:8px 0 2px' }, c.first_name),
+          el('p', { class: 'muted', style: 'margin:0;font-size:.9rem' },
+            'Total disponible : ' + totalAvail + ' pts (👛 ' + wBal + ' pts · 🐷 ' + sBal + ' pts)')),
+        el('div', { class: 'card', style: 'background:#fef2f2;border-color:#fecaca;text-align:center' },
+          el('strong', { style: 'color:var(--red);font-size:1.05rem' },
+            'Il manque ' + diff + ' point' + (diff > 1 ? 's' : '') + ' pour « ' + r.label + ' »'),
+          el('p', { style: 'font-size:.85rem;color:#991b1b;margin:4px 0 0' },
+            'Prix : ' + r.cost + ' points. Continue les vols quotidiens pour atteindre l’objectif !'))),
+      [{ label: 'Compris', class: 'btn-primary', onClick: close => close() }]);
+      return;
+    }
 
     // Répartition initiale suggérée : prioritairement le portefeuille
     const defaultWallet = Math.min(r.cost, wBal);
@@ -302,6 +331,23 @@ function openAttributionModal(r) {
 
   } else {
     // Cas collectif : pour tous les enfants
+    const totalCollective = children.reduce((sum, k) => {
+      const bo = balances.find(x => x.child_id === k.id) || {};
+      return sum + (bo.wallet_balance ?? 0) + (bo.savings_balance ?? 0);
+    }, 0);
+
+    if (totalCollective < r.cost) {
+      const diff = r.cost - totalCollective;
+      modal('⚠️ Cagnotte collective insuffisante', el('div', {},
+        el('div', { class: 'card', style: 'background:#fef2f2;border-color:#fecaca;text-align:center' },
+          el('strong', { style: 'color:var(--red);font-size:1.05rem' },
+            'Il manque ' + diff + ' point' + (diff > 1 ? 's' : '') + ' au total pour « ' + r.label + ' »'),
+          el('p', { style: 'font-size:.85rem;color:#991b1b;margin:4px 0 0' },
+            'Cagnotte disponible de la fratrie : ' + totalCollective + ' / ' + r.cost + ' points.'))),
+      [{ label: 'Compris', class: 'btn-primary', onClick: close => close() }]);
+      return;
+    }
+
     const kidsInputs = children.map(c => {
       const bo = balances.find(x => x.child_id === c.id) || {};
       const wBal = bo.wallet_balance ?? 0;
@@ -414,30 +460,178 @@ async function executeRedemption(r, shares) {
 }
 
 // ---------------------------------------------------------------------
-// Section « Récompenses acquises » (Historique)
+// Section « Récompenses acquises » (Historique riche avec filtres)
 // ---------------------------------------------------------------------
 function renderHistorySection(app) {
+  // 1. Filtrage des données
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).toISOString().slice(0, 10);
+  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+
+  const filtered = rewardHistory.filter(e => {
+    // Filtre enfant
+    if (histFilterChild !== 'all' && e.child_id !== histFilterChild) return false;
+
+    // Filtre type (Portefeuille vs Tirelire / scope)
+    const scope = e.redemptions?.rewards?.scope || (e.wallet_target === 'savings' ? 'collective' : 'individual');
+    if (histFilterScope === 'individual' && scope !== 'individual') return false;
+    if (histFilterScope === 'collective' && scope !== 'collective') return false;
+
+    // Filtre période
+    if (histFilterTime === 'month' && e.event_date < startOfMonth) return false;
+    if (histFilterTime === 'quarter' && e.event_date < startOfQuarter) return false;
+    if (histFilterTime === 'year' && e.event_date < startOfYear) return false;
+
+    // Filtre récompense spécifique
+    if (histFilterRewardId !== 'all') {
+      const matchId = e.redemptions?.reward_id === histFilterRewardId;
+      const targetReward = rewards.find(r => r.id === histFilterRewardId);
+      const matchNote = targetReward && e.note && e.note.includes(targetReward.label);
+      if (!matchId && !matchNote) return false;
+    }
+
+    return true;
+  });
+
+  // Calculs KPI pour les cartes synthétiques
+  const totalCount = filtered.length;
+  let totalPtsWallet = 0;
+  let totalPtsSavings = 0;
+  filtered.forEach(e => {
+    const ptsVal = Math.abs(e.points || 0);
+    if (e.wallet_target === 'savings') totalPtsSavings += ptsVal;
+    else totalPtsWallet += ptsVal;
+  });
+  const totalPtsAll = totalPtsWallet + totalPtsSavings;
+
+  // 2. Composants de filtres UX soignés
+  // Filtre enfants
+  const childChips = el('div', { class: 'chips', style: 'gap:8px;margin-bottom:10px' },
+    el('button', {
+      class: 'chip' + (histFilterChild === 'all' ? ' on' : ''),
+      onclick: () => { histFilterChild = 'all'; render(); }
+    }, 'Tous les enfants (' + rewardHistory.length + ')'),
+    ...children.map(k => {
+      const countForKid = rewardHistory.filter(e => e.child_id === k.id).length;
+      return el('button', {
+        class: 'chip' + (histFilterChild === k.id ? ' on' : ''),
+        style: 'display:inline-flex;align-items:center;gap:6px',
+        onclick: () => { histFilterChild = k.id; render(); }
+      },
+        avatar(k.first_name, { size: 'xs', customSrc: k.avatar }),
+        el('span', {}, k.first_name + ' (' + countForKid + ')'));
+    })
+  );
+
+  // Filtres Type & Période
+  const scopeChips = el('div', { class: 'chips', style: 'gap:6px' },
+    el('button', { class: 'chip' + (histFilterScope === 'all' ? ' on' : ''), onclick: () => { histFilterScope = 'all'; render(); } }, 'Tous types'),
+    el('button', { class: 'chip' + (histFilterScope === 'individual' ? ' on' : ''), onclick: () => { histFilterScope = 'individual'; render(); } }, 'Individuelles 👛'),
+    el('button', { class: 'chip' + (histFilterScope === 'collective' ? ' on' : ''), onclick: () => { histFilterScope = 'collective'; render(); } }, 'Collectives 🐷'));
+
+  const timeChips = el('div', { class: 'chips', style: 'gap:6px' },
+    el('button', { class: 'chip' + (histFilterTime === 'all' ? ' on' : ''), onclick: () => { histFilterTime = 'all'; render(); } }, 'Tout l’historique'),
+    el('button', { class: 'chip' + (histFilterTime === 'month' ? ' on' : ''), onclick: () => { histFilterTime = 'month'; render(); } }, 'Ce mois-ci'),
+    el('button', { class: 'chip' + (histFilterTime === 'quarter' ? ' on' : ''), onclick: () => { histFilterTime = 'quarter'; render(); } }, 'Ce trimestre'),
+    el('button', { class: 'chip' + (histFilterTime === 'year' ? ' on' : ''), onclick: () => { histFilterTime = 'year'; render(); } }, 'Cette année'));
+
+  // Sélecteur par récompense spécifique
+  const rewardOptions = [
+    el('option', { value: 'all' }, '— Toutes les récompenses confondues —'),
+    ...rewards.map(r => el('option', { value: r.id, selected: histFilterRewardId === r.id }, r.label + ' (' + r.cost + ' pts)'))
+  ];
+  const rewardSelect = el('select', {
+    style: 'margin-top:6px;font-weight:600',
+    onchange: e => { histFilterRewardId = e.target.value; render(); }
+  }, ...rewardOptions);
+
+  // 3. Carte récapitulative KPI
+  const kpiBox = el('div', {
+    class: 'card',
+    style: 'background:linear-gradient(145deg,#0B2046,#123a74);color:#fff;padding:16px;border-radius:14px;margin-bottom:14px'
+  },
+    el('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center' },
+      el('div', {},
+        el('div', { style: 'font-size:1.6rem;font-weight:900;color:var(--cyan)' }, String(totalCount)),
+        el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Récompenses')),
+      el('div', { style: 'border-left:1px solid rgba(255,255,255,.15);border-right:1px solid rgba(255,255,255,.15)' },
+        el('div', { style: 'font-size:1.6rem;font-weight:900;color:#38bdf8' }, String(totalPtsWallet)),
+        el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Pts Portefeuille 👛')),
+      el('div', {},
+        el('div', { style: 'font-size:1.6rem;font-weight:900;color:#f0abfc' }, String(totalPtsSavings)),
+        el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Pts Tirelire 🐷'))));
+
+  // 4. Assemblage de la section Historique
   app.append(el('div', { class: 'card' },
-    el('h2', {}, 'Récompenses déjà obtenues'),
-    el('p', { class: 'muted', style: 'margin-top:-6px' },
-      'Historique chronologique des récompenses accordées aux enfants.'),
-    rewardHistory.length
-      ? el('div', { class: 'rewards-history', style: 'display:grid;gap:10px;margin-top:14px' },
-          ...rewardHistory.map(e => historyEntry(e)))
-      : el('p', { class: 'muted', style: 'text-align:center;padding:24px 0' }, 'Aucune récompense acquise pour l’instant.')));
+    el('h2', {}, 'Historique des récompenses obtenues'),
+    el('p', { class: 'muted', style: 'margin-top:-6px' }, 'Explorez les récompenses accordées selon vos critères.'),
+    childChips,
+    el('div', { class: 'row', style: 'gap:10px;margin-bottom:10px;flex-wrap:wrap' }, scopeChips, timeChips),
+    champ('Filtrer sur une récompense spécifique', rewardSelect)
+  ));
+
+  app.append(kpiBox);
+
+  // Liste des cartes de récompenses
+  if (filtered.length === 0) {
+    app.append(el('div', { class: 'card', style: 'text-align:center;padding:32px 16px' },
+      el('div', { style: 'font-size:2rem;margin-bottom:8px' }, '🔍'),
+      el('strong', { style: 'display:block;font-size:1.05rem' }, 'Aucune récompense ne correspond à ces filtres.'),
+      el('p', { class: 'muted', style: 'font-size:.85rem;margin:4px 0 12px' }, 'Essayez d’élargir vos critères ou de sélectionner une autre période.'),
+      el('button', {
+        class: 'btn btn-sm btn-ghost',
+        onclick: () => {
+          histFilterChild = 'all'; histFilterScope = 'all'; histFilterTime = 'all'; histFilterRewardId = 'all';
+          render();
+        }
+      }, 'Réinitialiser tous les filtres')));
+  } else {
+    app.append(el('div', { style: 'display:grid;gap:10px' },
+      ...filtered.map(e => historyEntry(e))));
+  }
 }
 
 function historyEntry(e) {
   const c = kid(e.child_id);
-  const targetDesc = e.wallet_target === 'savings' ? '🐷 Tirelire Magique' : '👛 Portefeuille';
-  return el('div', { class: 'entry', style: 'display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff' },
-    el('div', { style: 'display:flex;align-items:center;gap:12px' },
-      avatar(c.first_name, { size: 'sm', customSrc: c.avatar }),
-      el('div', {},
-        el('strong', { style: 'font-size:1.02rem;display:block' }, e.categories?.label || e.note || 'Récompense'),
-        el('div', { class: 'muted', style: 'font-size:.8rem' },
-          c.first_name + ' · ' + api.formatDate(e.event_date) + ' · ' + targetDesc))),
-    el('span', { class: 'neg', style: 'font-size:1.1rem;font-weight:800' }, pts(e.points)));
+  const isSavings = e.wallet_target === 'savings';
+  const label = e.categories?.label || e.note || 'Récompense';
+  const rewardImg = e.redemptions?.rewards?.image_url || null;
+
+  return el('div', {
+    class: 'entry',
+    style: 'display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;gap:12px'
+  },
+    el('div', { style: 'display:flex;align-items:center;gap:12px;min-width:0' },
+      rewardImg
+        ? el('img', { src: rewardImg, style: 'width:56px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--line);flex:none' })
+        : el('div', { style: 'width:40px;height:40px;border-radius:8px;background:#f1f5f9;display:grid;place-items:center;font-size:1.2rem;flex:none' }, '🎁'),
+      el('div', { style: 'min-width:0' },
+        el('strong', { style: 'font-size:1.02rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, label),
+        el('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:2px;flex-wrap:wrap' },
+          el('span', { style: 'display:inline-flex;align-items:center;gap:4px;font-size:.82rem;font-weight:700' },
+            avatar(c.first_name, { size: 'xs', customSrc: c.avatar }),
+            el('span', {}, c.first_name)),
+          el('span', { class: 'muted', style: 'font-size:.78rem' }, '· ' + api.formatDate(e.event_date)),
+          el('span', {
+            class: 'badge',
+            style: isSavings ? 'background:#fdf4ff;color:#a21caf;font-size:.7rem' : 'background:#f0f9ff;color:var(--cyan-d);font-size:.7rem'
+          }, isSavings ? '🐷 Tirelire' : '👛 Portefeuille')))),
+    el('div', { style: 'text-align:right;flex:none' },
+      el('span', { class: 'neg', style: 'font-size:1.2rem;font-weight:900;display:block' }, pts(e.points)),
+      e.redemption_id ? el('button', {
+        class: 'btn btn-sm btn-ghost',
+        style: 'color:var(--red);font-size:.74rem;padding:2px 6px;margin-top:2px',
+        onclick: async () => {
+          if (!window.confirm('Annuler l’attribution de « ' + label + ' » ?\n\nLes points seront immédiatement restitués dans le bon stock.')) return;
+          try {
+            await api.cancelRedemption(e.redemption_id, 'Annulation manuelle');
+            await load();
+            render();
+            toast('Récompense annulée, points restitués !');
+          } catch (err) { fail(err); }
+        }
+      }, 'Annuler') : null));
 }
 
 export async function mount(container) {

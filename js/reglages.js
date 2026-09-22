@@ -42,7 +42,8 @@ async function reload() {
   parents = pr;
   savingsSettings = sav;
   balances = bal;
-  rewardRedemptions = rRed;
+  const reversedIds = new Set(rRed.filter(e => e.reverses_id).map(e => e.reverses_id));
+  rewardRedemptions = rRed.filter(e => e.kind === 'reward' && !reversedIds.has(e.id) && e.redemptions?.state !== 'cancelled');
   render();
 }
 
