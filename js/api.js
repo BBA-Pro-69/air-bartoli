@@ -160,13 +160,13 @@ export const createCrewMember = (email, password, displayName, roleTitle) =>
   rpc('create_crew_member', { p_email: email, p_password: password, p_display_name: displayName, p_role_title: roleTitle || 'Membre d’équipage' });
 export const removeCrewMember = (userId) =>
   rpc('remove_crew_member', { p_user_id: userId });
-export const getRewardRedemptions = () => rows(
-  sb.from('events')
-    .select('*, children(first_name, color, avatar), redemptions(reward_id, rewards(label, scope, cost))')
-    .eq('kind', 'reward')
-    .order('event_date', { ascending: false })
-    .order('created_at', { ascending: false })
+export const getRedemptionsHistory = () => rows(
+  sb.from('redemptions')
+    .select('*, rewards(id, label, scope, cost, image_url), redemption_shares(child_id, points, wallet_points, savings_points, children(id, first_name, color, avatar))')
+    .eq('state', 'approved')
+    .order('decided_at', { ascending: false })
 );
+export const getRewardRedemptions = getRedemptionsHistory;
 
 export const updateCrewMember = (userId, displayName, roleTitle = null, avatarUrl = null, email = null) =>
   rpc('update_crew_member', {

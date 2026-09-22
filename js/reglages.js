@@ -29,7 +29,7 @@ async function reload() {
     api.getParents().catch(() => []),
     api.getSavingsSettings().catch(() => ({ annual_interest_rate: 100.00, default_savings_pct: 70, active: true })),
     api.getBalances().catch(() => []),
-    api.getRewardRedemptions().catch(() => [])
+    api.getRedemptionsHistory().catch(() => [])
   ]);
   allChildren = allC;
   children = allChildren.filter(c => c.active !== false);
@@ -42,8 +42,7 @@ async function reload() {
   parents = pr;
   savingsSettings = sav;
   balances = bal;
-  const reversedIds = new Set(rRed.filter(e => e.reverses_id).map(e => e.reverses_id));
-  rewardRedemptions = rRed.filter(e => e.kind === 'reward' && !reversedIds.has(e.id) && e.redemptions?.state !== 'cancelled');
+  rewardRedemptions = rRed || [];
   render();
 }
 
@@ -849,25 +848,40 @@ function openRewardHistoryModal(r, historyList) {
     el('div', {},
       el('strong', { style: 'font-size:1.1rem;display:block' }, r.label),
       el('span', { class: 'muted', style: 'font-size:.85rem' },
-        (isCollective ? '🐷 Tirelire Magique' : '👛 Portefeuille') + ' · ' + r.cost + ' points'),
+        (isCollective ? '🐷 Sortie collective' : '👛 Récompense individuelle') + ' · ' + r.cost + ' points'),
       el('div', { style: 'font-size:.82rem;font-weight:800;color:var(--cyan-d);margin-top:2px' },
         'Attribuée ' + historyList.length + ' fois au total')));
 
-  const listContainer = el('div', { style: 'display:grid;gap:8px;max-height:60vh;overflow-y:auto' });
+  const listContainer = el('div', { style: 'display:grid;gap:10px;max-height:60vh;overflow-y:auto' });
 
   if (historyList.length === 0) {
     listContainer.append(el('p', { class: 'muted', style: 'text-align:center;padding:24px 0' }, 'Cette récompense n’a pas encore été attribuée.'));
   } else {
-    historyList.forEach(e => {
-      const childName = e.children?.first_name || 'Enfant';
-      const childAvatar = e.children?.avatar || null;
-      listContainer.append(el('div', { style: 'display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff' },
-        el('div', { style: 'display:flex;align-items:center;gap:10px' },
-          avatar(childName, { size: 'xs', customSrc: childAvatar, title: childName }),
-          el('div', {},
-            el('strong', {}, childName),
-            el('div', { class: 'muted', style: 'font-size:.78rem' }, api.formatDate(e.event_date)))),
-        el('span', { style: 'font-weight:800;color:var(--cyan-d);font-size:.9rem' }, pts(e.points))));
+    historyList.forEach(red => {
+      const dateStr = (red.decided_at || '').slice(0, 10);
+      const shares = red.redemption_shares || [];
+
+      listContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff' },
+        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px' },
+          el('span', { class: 'muted', style: 'font-size:.82rem;font-weight:600' }, api.formatDate(dateStr)),
+          el('span', { style: 'font-weight:900;color:var(--cyan-d);font-size:1.05rem' }, '-' + red.cost_total + ' pts')),
+        el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' },
+          ...shares.map(s => {
+            const cName = s.children?.first_name || 'Enfant';
+            const cAvatar = s.children?.avatar || null;
+            const wp = s.wallet_points || 0;
+            const sp = s.savings_points || 0;
+            let detailPay = '';
+            if (wp > 0 && sp > 0) detailPay = '(👛 ' + wp + ' + 🐷 ' + sp + ')';
+            else if (wp > 0) detailPay = '(👛 Portefeuille)';
+            else if (sp > 0) detailPay = '(🐷 Tirelire)';
+
+            return el('div', { style: 'display:inline-flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:.78rem' },
+              avatar(cName, { size: 'xs', customSrc: cAvatar }),
+              el('strong', {}, cName),
+              el('span', {}, '-' + s.points + ' pts'),
+              el('span', { class: 'muted' }, detailPay));
+          }))));
     });
   }
 

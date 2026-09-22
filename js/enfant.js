@@ -94,10 +94,10 @@ function adjustShares(shares, changedIdx, newVal, total) {
 }
 
 async function load() {
-  const [c, lv, b, rw, elg, rt, evs] = await Promise.all([
+  const [c, lv, b, rw, elg, rt, redHist] = await Promise.all([
     api.getChildren(), api.getLevels(), api.getBalances(),
     api.getRewards(), api.getEligibility(), api.getRates(),
-    api.getEvents(200)
+    api.getRedemptionsHistory()
   ]);
   children = c.filter(k => k.active !== false);
   levels = lv;
@@ -106,9 +106,8 @@ async function load() {
   elig = elg;
   rates = rt;
 
-  // Exclusion stricte des récompenses annulées (reverses_id existant ou state=cancelled)
-  const reversedIds = new Set(evs.filter(e => e.reverses_id).map(e => e.reverses_id));
-  rewardHistory = evs.filter(e => e.kind === 'reward' && !reversedIds.has(e.id) && e.redemptions?.state !== 'cancelled');
+  // Historique basé sur les échanges réels approuvés (redemptions)
+  rewardHistory = redHist || [];
 
   if (!current || !children.some(k => k.id === current)) {
     current = children[0]?.id;
@@ -685,35 +684,35 @@ function renderHistorySection(app) {
   const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).toISOString().slice(0, 10);
   const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
 
-  // 1. Filtrage de base (enfant, type, période)
-  const baseFiltered = rewardHistory.filter(e => {
-    // Filtre enfant
-    if (histFilterChild !== 'all' && e.child_id !== histFilterChild) return false;
+  // 1. Filtrage de base (enfant, nature intrinsèque de la récompense, période)
+  const baseFiltered = rewardHistory.filter(red => {
+    // Filtre enfant : l'enfant doit faire partie des bénéficiaires
+    if (histFilterChild !== 'all') {
+      const hasKid = (red.redemption_shares || []).some(s => s.child_id === histFilterChild);
+      if (!hasKid) return false;
+    }
 
-    // Filtre type (Portefeuille vs Tirelire / scope)
-    const scope = e.redemptions?.rewards?.scope || (e.wallet_target === 'savings' ? 'collective' : 'individual');
-    if (histFilterScope === 'individual' && scope !== 'individual') return false;
-    if (histFilterScope === 'collective' && scope !== 'collective') return false;
+    // Filtre nature : STRICTEMENT la nature intrinsèque de la récompense (scope)
+    const intrinsicScope = red.rewards?.scope || red.scope || 'individual';
+    if (histFilterScope === 'individual' && intrinsicScope !== 'individual') return false;
+    if (histFilterScope === 'collective' && intrinsicScope !== 'collective') return false;
 
-    // Filtre période
-    if (histFilterTime === 'month' && e.event_date < startOfMonth) return false;
-    if (histFilterTime === 'quarter' && e.event_date < startOfQuarter) return false;
-    if (histFilterTime === 'year' && e.event_date < startOfYear) return false;
+    // Filtre période (sur decided_at)
+    const dateISO = (red.decided_at || '').slice(0, 10);
+    if (histFilterTime === 'month' && dateISO < startOfMonth) return false;
+    if (histFilterTime === 'quarter' && dateISO < startOfQuarter) return false;
+    if (histFilterTime === 'year' && dateISO < startOfYear) return false;
 
     return true;
   });
 
-  // 2. Récompenses éligibles pour la liste déroulante :
-  // UNIQUEMENT celles qui ont été attribuées au moins une fois correspondant aux autres filtres !
-  const countForReward = r => baseFiltered.filter(e =>
-    e.redemptions?.reward_id === r.id || (e.note && e.note.includes(r.label))
-  ).length;
+  // 2. Décompte contextuel par récompense éligible
+  const countForReward = r => baseFiltered.filter(red => red.reward_id === r.id).length;
 
   const activeAttributedRewards = rewards
     .map(r => ({ reward: r, count: countForReward(r) }))
     .filter(item => item.count > 0);
 
-  // Si la récompense sélectionnée n'est plus dans la liste éligible, revenir à 'all'
   if (histFilterRewardId !== 'all' && !activeAttributedRewards.some(item => item.reward.id === histFilterRewardId)) {
     histFilterRewardId = 'all';
   }
@@ -721,31 +720,31 @@ function renderHistorySection(app) {
   // 3. Filtrage final (avec la récompense spécifique si choisie)
   const filtered = (histFilterRewardId === 'all')
     ? baseFiltered
-    : baseFiltered.filter(e => {
-        const targetReward = rewards.find(r => r.id === histFilterRewardId);
-        const matchId = e.redemptions?.reward_id === histFilterRewardId;
-        const matchNote = targetReward && e.note && e.note.includes(targetReward.label);
-        return matchId || matchNote;
-      });
+    : baseFiltered.filter(red => red.reward_id === histFilterRewardId);
 
   const totalCount = filtered.length;
   let totalPtsWallet = 0;
   let totalPtsSavings = 0;
-  filtered.forEach(e => {
-    const ptsVal = Math.abs(e.points || 0);
-    if (e.wallet_target === 'savings') totalPtsSavings += ptsVal;
-    else totalPtsWallet += ptsVal;
+
+  filtered.forEach(red => {
+    (red.redemption_shares || []).forEach(s => {
+      totalPtsWallet += (s.wallet_points || 0);
+      totalPtsSavings += (s.savings_points || 0);
+      if (!s.wallet_points && !s.savings_points) {
+        if (red.scope === 'collective') totalPtsSavings += (s.points || 0);
+        else totalPtsWallet += (s.points || 0);
+      }
+    });
   });
 
-  // 4. Composants de filtres avec séparateurs nets
-  // Filtre enfants
+  // 4. Composants de filtres avec séparateurs
   const childChips = el('div', { class: 'chips', style: 'gap:8px;justify-content:center' },
     el('button', {
       class: 'chip' + (histFilterChild === 'all' ? ' on' : ''),
       onclick: () => { histFilterChild = 'all'; render(); }
     }, 'Tous les enfants (' + rewardHistory.length + ')'),
     ...children.map(k => {
-      const countForKid = rewardHistory.filter(e => e.child_id === k.id).length;
+      const countForKid = rewardHistory.filter(red => (red.redemption_shares || []).some(s => s.child_id === k.id)).length;
       return el('button', {
         class: 'chip' + (histFilterChild === k.id ? ' on' : ''),
         style: 'display:inline-flex;align-items:center;gap:6px',
@@ -756,20 +755,17 @@ function renderHistorySection(app) {
     })
   );
 
-  // Filtre Type
   const scopeChips = el('div', { class: 'chips', style: 'gap:6px;justify-content:center' },
-    el('button', { class: 'chip' + (histFilterScope === 'all' ? ' on' : ''), onclick: () => { histFilterScope = 'all'; render(); } }, 'Toutes (individuelles & collectives)'),
+    el('button', { class: 'chip' + (histFilterScope === 'all' ? ' on' : ''), onclick: () => { histFilterScope = 'all'; render(); } }, 'Toutes natures'),
     el('button', { class: 'chip' + (histFilterScope === 'individual' ? ' on' : ''), onclick: () => { histFilterScope = 'individual'; render(); } }, 'Individuelles 👛'),
     el('button', { class: 'chip' + (histFilterScope === 'collective' ? ' on' : ''), onclick: () => { histFilterScope = 'collective'; render(); } }, 'Collectives 🐷'));
 
-  // Filtre Période
   const timeChips = el('div', { class: 'chips', style: 'gap:6px;justify-content:center' },
     el('button', { class: 'chip' + (histFilterTime === 'all' ? ' on' : ''), onclick: () => { histFilterTime = 'all'; render(); } }, 'Tout l’historique'),
     el('button', { class: 'chip' + (histFilterTime === 'month' ? ' on' : ''), onclick: () => { histFilterTime = 'month'; render(); } }, 'Ce mois-ci'),
     el('button', { class: 'chip' + (histFilterTime === 'quarter' ? ' on' : ''), onclick: () => { histFilterTime = 'quarter'; render(); } }, 'Ce trimestre'),
     el('button', { class: 'chip' + (histFilterTime === 'year' ? ' on' : ''), onclick: () => { histFilterTime = 'year'; render(); } }, 'Cette année'));
 
-  // Sélecteur de récompense contextuel (affiche le nombre correspondant aux autres filtres)
   const rewardOptions = [
     el('option', { value: 'all' }, '— Toutes les récompenses attribuées (' + baseFiltered.length + ') —'),
     ...activeAttributedRewards.map(item =>
@@ -789,7 +785,7 @@ function renderHistorySection(app) {
     el('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center' },
       el('div', {},
         el('div', { style: 'font-size:1.6rem;font-weight:900;color:var(--cyan)' }, String(totalCount)),
-        el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Récompenses')),
+        el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Attributions réelles')),
       el('div', { style: 'border-left:1px solid rgba(255,255,255,.15);border-right:1px solid rgba(255,255,255,.15)' },
         el('div', { style: 'font-size:1.6rem;font-weight:900;color:#38bdf8' }, String(totalPtsWallet)),
         el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Pts Portefeuille 👛')),
@@ -797,13 +793,13 @@ function renderHistorySection(app) {
         el('div', { style: 'font-size:1.6rem;font-weight:900;color:#f0abfc' }, String(totalPtsSavings)),
         el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Pts Tirelire 🐷'))));
 
-  // 6. Assemblage du panneau de filtres avec séparateurs
+  // 6. Assemblage
   app.append(el('div', { class: 'card' },
     el('h2', { style: 'margin:0 0 4px;text-align:center' }, 'Historique des récompenses obtenues'),
     el('p', { class: 'muted', style: 'margin:0 0 10px;text-align:center' }, 'Affinez l’affichage selon vos critères.'),
     filterDivider('👤 Bénéficiaire'),
     childChips,
-    filterDivider('🏷️ Type de récompense'),
+    filterDivider('🏷️ Nature de la récompense'),
     scopeChips,
     filterDivider('📅 Période'),
     timeChips,
@@ -826,52 +822,73 @@ function renderHistorySection(app) {
         }
       }, 'Réinitialiser tous les filtres')));
   } else {
-    app.append(el('div', { style: 'display:grid;gap:10px' },
-      ...filtered.map(e => historyEntry(e))));
+    app.append(el('div', { style: 'display:grid;gap:12px' },
+      ...filtered.map(red => historyEntry(red))));
   }
 }
 
-function historyEntry(e) {
-  const c = kid(e.child_id);
-  const isSavings = e.wallet_target === 'savings';
-  const label = e.categories?.label || e.note || 'Récompense';
-  const rewardImg = e.redemptions?.rewards?.image_url || null;
+function historyEntry(red) {
+  const isCollective = (red.rewards?.scope || red.scope) === 'collective';
+  const label = red.rewards?.label || 'Récompense';
+  const rewardImg = red.rewards?.image_url || null;
+  const dateStr = (red.decided_at || '').slice(0, 10);
+  const shares = red.redemption_shares || [];
 
   return el('div', {
     class: 'entry',
-    style: 'display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;gap:12px'
+    style: 'display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#fff'
   },
-    el('div', { style: 'display:flex;align-items:center;gap:12px;min-width:0' },
-      rewardImg
-        ? el('img', { src: rewardImg, style: 'width:56px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--line);flex:none' })
-        : el('div', { style: 'width:40px;height:40px;border-radius:8px;background:#f1f5f9;display:grid;place-items:center;font-size:1.2rem;flex:none' }, '🎁'),
-      el('div', { style: 'min-width:0' },
-        el('strong', { style: 'font-size:1.02rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, label),
-        el('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:2px;flex-wrap:wrap' },
-          el('span', { style: 'display:inline-flex;align-items:center;gap:4px;font-size:.82rem;font-weight:700' },
-            avatar(c.first_name, { size: 'xs', customSrc: c.avatar }),
-            el('span', {}, c.first_name)),
-          el('span', { class: 'muted', style: 'font-size:.78rem' }, '· ' + api.formatDate(e.event_date)),
-          el('span', {
-            class: 'badge',
-            style: isSavings ? 'background:#fdf4ff;color:#a21caf;font-size:.7rem' : 'background:#f0f9ff;color:var(--cyan-d);font-size:.7rem'
-          }, isSavings ? '🐷 Tirelire' : '👛 Portefeuille')))),
-    el('div', { style: 'text-align:right;flex:none' },
-      el('span', { class: 'neg', style: 'font-size:1.2rem;font-weight:900;display:block' }, pts(e.points)),
-      e.redemption_id ? el('button', {
-        class: 'btn btn-sm btn-ghost',
-        style: 'color:var(--red);font-size:.74rem;padding:2px 6px;margin-top:2px',
-        onclick: async () => {
-          if (!window.confirm('Annuler l’attribution de « ' + label + ' » ?\n\nLes points seront immédiatement restitués dans le bon stock.')) return;
-          try {
-            await api.cancelRedemption(e.redemption_id, 'Annulation manuelle');
-            await load();
-            render();
-            toast('Récompense annulée, points restitués !');
-          } catch (err) { fail(err); }
-        }
-      }, 'Annuler') : null));
+    el('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:12px' },
+      el('div', { style: 'display:flex;align-items:center;gap:12px;min-width:0' },
+        rewardImg
+          ? el('img', { src: rewardImg, style: 'width:64px;height:42px;border-radius:8px;object-fit:cover;border:1px solid var(--line);flex:none' })
+          : el('div', { style: 'width:42px;height:42px;border-radius:8px;background:#f1f5f9;display:grid;place-items:center;font-size:1.3rem;flex:none' }, '🎁'),
+        el('div', { style: 'min-width:0' },
+          el('strong', { style: 'font-size:1.08rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, label),
+          el('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:2px' },
+            el('span', { class: 'muted', style: 'font-size:.82rem' }, api.formatDate(dateStr)),
+            el('span', {
+              class: 'badge',
+              style: isCollective ? 'background:#fdf4ff;color:#a21caf;font-size:.72rem' : 'background:#f0f9ff;color:var(--cyan-d);font-size:.72rem'
+            }, isCollective ? '🐷 Sortie collective' : '👛 Récompense individuelle')))),
+      el('div', { style: 'text-align:right;flex:none' },
+        el('span', { class: 'neg', style: 'font-size:1.3rem;font-weight:900;display:block' }, '-' + red.cost_total + ' pts'),
+        el('button', {
+          class: 'btn btn-sm btn-ghost',
+          style: 'color:var(--red);font-size:.74rem;padding:2px 8px;margin-top:2px',
+          onclick: async () => {
+            if (!window.confirm('Annuler l’attribution de « ' + label + ' » ?\n\nTous les points prélevés seront immédiatement restitués dans leurs stocks d’origine.')) return;
+            try {
+              await api.cancelRedemption(red.id, 'Annulation manuelle');
+              await load();
+              render();
+              toast('Attribution annulée, points restitués !');
+            } catch (err) { fail(err); }
+          }
+        }, 'Annuler'))),
+    el('div', { style: 'border-top:1px solid var(--line);padding-top:8px;display:flex;flex-wrap:wrap;gap:8px' },
+      ...shares.map(s => {
+        const cName = s.children?.first_name || 'Enfant';
+        const cAvatar = s.children?.avatar || null;
+        const wp = s.wallet_points || 0;
+        const sp = s.savings_points || 0;
+        let detailPay = '';
+        if (wp > 0 && sp > 0) detailPay = '(👛 ' + wp + ' + 🐷 ' + sp + ')';
+        else if (wp > 0) detailPay = '(👛 Portefeuille)';
+        else if (sp > 0) detailPay = '(🐷 Tirelire)';
+        else detailPay = isCollective ? '(🐷 Tirelire)' : '(👛 Portefeuille)';
+
+        return el('div', {
+          style: 'display:inline-flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:.8rem'
+        },
+          avatar(cName, { size: 'xs', customSrc: cAvatar }),
+          el('strong', {}, cName),
+          el('span', { style: 'color:var(--navy);font-weight:700' }, '-' + s.points + ' pts'),
+          el('span', { class: 'muted', style: 'font-size:.74rem' }, detailPay));
+      }))
+  );
 }
+
 
 export async function mount(container) {
   root = container;
