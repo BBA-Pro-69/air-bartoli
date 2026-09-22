@@ -2,8 +2,9 @@
 //  Ecran Récompenses (🎁) — Air Bartoli
 //  1. Bandeau photo XL, solde total et répartition Portefeuille & Tirelire
 //  2. Sous-onglets : « Individuelles 👛 » & « Collectives 🐷 »
-//  3. Choix précis du stock de prélèvement (Portefeuille vs Tirelire) par enfant
-//  4. Historique riche des récompenses acquises avec filtres (enfant, type, temps, récompense)
+//  3. Curseurs asservis (Portefeuille vs Tirelire) garantissant la somme exacte
+//  4. Répartition multi-enfants automatique et intelligente (N enfants)
+//  5. Historique riche des récompenses acquises avec filtres et KPIs
 // =====================================================================
 import * as api from './api.js';
 import { el, pts, toast, fail, modal, gauge, undoBar, avatar } from './ui.js';
@@ -28,6 +29,14 @@ const kid   = id => children.find(c => c.id === id) || {};
 
 function champ(label, input) {
   return el('div', { class: 'field' }, el('label', {}, label), input);
+}
+
+// Algorithme de répartition équitable d'un total T entre N enfants (les premiers prennent l'arrondi)
+function distributePoints(total, n) {
+  if (n <= 0) return [];
+  const base = Math.floor(total / n);
+  const rem = total % n;
+  return Array.from({ length: n }, (_, i) => i < rem ? base + 1 : base);
 }
 
 async function load() {
@@ -111,7 +120,7 @@ function render() {
   // Menu principal : « Récompenses à gagner » vs « Récompenses acquises »
   const mainTabs = [
     { id: 'catalog', label: '🎁 Récompenses à gagner' },
-    { id: 'history', label: '📜 Récompenses acquises' }
+    { id: 'history', label: '📜 Récompenses acquises (' + rewardHistory.length + ')' }
   ];
 
   app.append(el('div', { class: 'chips', style: 'margin-bottom:16px;justify-content:center;gap:10px' },
@@ -227,19 +236,20 @@ function collectiveCard(r) {
 }
 
 // ---------------------------------------------------------------------
-// MODALE INTERACTIVE D'ATTRIBUTION (CHOIX PORTEFEUILLE VS TIRELIRE)
+// MODALE INTERACTIVE D'ATTRIBUTION AVEC CURSEURS ASSERVIS
 // ---------------------------------------------------------------------
 function openAttributionModal(r) {
   const isCollective = r.scope === 'collective';
 
   if (!isCollective) {
+    // Cas individuel : pour l'enfant sélectionné
     const c = kid(current);
     const bo = balances.find(x => x.child_id === current) || {};
     const wBal = bo.wallet_balance ?? 0;
     const sBal = bo.savings_balance ?? 0;
     const totalAvail = wBal + sBal;
 
-    // Pop-up si solde insuffisant
+    // Pop-up claire si les points totaux sont insuffisants
     if (totalAvail < r.cost) {
       const diff = r.cost - totalAvail;
       modal('⚠️ Points insuffisants', el('div', {},
@@ -257,80 +267,69 @@ function openAttributionModal(r) {
       return;
     }
 
-    // Répartition initiale suggérée : prioritairement le portefeuille
-    const defaultWallet = Math.min(r.cost, wBal);
-    const defaultSavings = Math.min(r.cost - defaultWallet, sBal);
+    // Curseur asservi portefeuille <-> tirelire magique
+    // On peut prélever au maximum ce qui est disponible dans chaque stock
+    const maxWallet = Math.min(r.cost, wBal);
+    const minWallet = Math.max(0, r.cost - sBal);
+    let initialWallet = Math.min(r.cost, wBal);
+    if (initialWallet < minWallet) initialWallet = minWallet;
 
-    const inputWallet = el('input', {
-      type: 'number', min: '0', max: String(wBal), value: String(defaultWallet),
-      style: 'font-weight:700;font-size:1.1rem;color:var(--cyan-d)'
+    let curWallet = initialWallet;
+    let curSavings = r.cost - curWallet;
+
+    const slider = el('input', {
+      type: 'range', min: String(minWallet), max: String(maxWallet), step: '1', value: String(curWallet),
+      style: 'width:100%;cursor:pointer;margin:10px 0'
     });
-    const inputSavings = el('input', {
-      type: 'number', min: '0', max: String(sBal), value: String(defaultSavings),
-      style: 'font-weight:700;font-size:1.1rem;color:#a21caf'
-    });
 
-    const sumBox = el('div', { class: 'card', style: 'background:#f8fafc;margin-top:12px;border:1px solid var(--line);text-align:center' });
-    const btnConfirm = el('button', { class: 'btn btn-primary btn-block', style: 'width:100%;margin-top:14px' }, '🎁 Confirmer l’attribution');
+    const badgeW = el('strong', { style: 'font-size:1.25rem;color:var(--cyan-d)' }, curWallet + ' pts');
+    const badgeS = el('strong', { style: 'font-size:1.25rem;color:#a21caf' }, curSavings + ' pts');
 
-    const updateCalc = () => {
-      const wp = Number(inputWallet.value) || 0;
-      const sp = Number(inputSavings.value) || 0;
-      const sum = wp + sp;
-      const ok = (sum === r.cost);
-
-      sumBox.innerHTML = '';
-      if (ok) {
-        sumBox.append(
-          el('div', { style: 'color:var(--green);font-weight:800;font-size:1.05rem' }, '✓ Total prélevé : ' + sum + ' / ' + r.cost + ' points'),
-          el('div', { class: 'muted', style: 'font-size:.82rem;margin-top:2px' },
-            wp + ' pts sur le Portefeuille 👛 et ' + sp + ' pts sur la Tirelire Magique 🐷✨'));
-        btnConfirm.disabled = false;
-        btnConfirm.classList.remove('btn-ghost');
-        btnConfirm.classList.add('btn-primary');
-      } else {
-        const diff = r.cost - sum;
-        sumBox.append(
-          el('div', { style: 'color:var(--red);font-weight:800;font-size:1.05rem' },
-            'Total saisi : ' + sum + ' / ' + r.cost + ' points'),
-          el('div', { style: 'color:var(--red);font-size:.84rem;margin-top:2px' },
-            diff > 0 ? ('Il manque encore ' + diff + ' point(s) pour couvrir le prix.') : ('Le total dépasse le prix de ' + Math.abs(diff) + ' point(s).')));
-        btnConfirm.disabled = true;
-        btnConfirm.classList.remove('btn-primary');
-        btnConfirm.classList.add('btn-ghost');
-      }
+    const updateSliderUI = () => {
+      curWallet = Number(slider.value);
+      curSavings = r.cost - curWallet;
+      badgeW.textContent = curWallet + ' pts';
+      badgeS.textContent = curSavings + ' pts';
     };
-
-    inputWallet.addEventListener('input', updateCalc);
-    inputSavings.addEventListener('input', updateCalc);
-    updateCalc();
+    slider.addEventListener('input', updateSliderUI);
 
     const body = el('div', {},
-      el('div', { style: 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f8fafc;border-radius:12px;margin-bottom:14px' },
+      el('div', { style: 'display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:12px;margin-bottom:14px' },
         avatar(c.first_name, { size: 'md', customSrc: c.avatar, title: c.first_name }),
         el('div', {},
-          el('strong', { style: 'font-size:1.1rem;display:block' }, r.label),
-          el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Pour ' + c.first_name + ' · Prix : ' + r.cost + ' points'))),
-      el('p', { class: 'muted', style: 'font-size:.88rem;margin-bottom:12px' },
-        'Choisissez librement combien de points prélever sur chaque stock de l’enfant :'),
-      el('div', { class: 'fields' },
-        champ('Sur le Portefeuille 👛 (disponible : ' + wBal + ' pts)', inputWallet),
-        champ('Sur la Tirelire Magique 🐷✨ (disponible : ' + sBal + ' pts)', inputSavings)),
-      sumBox,
-      btnConfirm);
+          el('strong', { style: 'font-size:1.15rem;display:block' }, r.label),
+          el('span', { class: 'muted', style: 'font-size:.85rem' },
+            'Pour ' + c.first_name + ' · Prix exact : ' + r.cost + ' points'))),
+      el('p', { class: 'muted', style: 'font-size:.88rem;margin:0 0 10px' },
+        'Déplacez le curseur pour choisir la répartition exacte. La somme fait automatiquement le montant requis :'),
+      el('div', { class: 'card', style: 'padding:14px;background:#fff;border:1px solid var(--line);border-radius:12px' },
+        el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;margin-bottom:8px' },
+          el('div', { style: 'background:#f0f9ff;border:1px solid #bae6fd;padding:8px;border-radius:10px' },
+            el('div', { style: 'font-size:.76rem;color:var(--muted);font-weight:700' }, 'Prélèvement Portefeuille 👛'),
+            badgeW,
+            el('div', { style: 'font-size:.7rem;color:var(--muted)' }, 'Dispo : ' + wBal + ' pts')),
+          el('div', { style: 'background:#fdf4ff;border:1px solid #f5d0fe;padding:8px;border-radius:10px' },
+            el('div', { style: 'font-size:.76rem;color:var(--muted);font-weight:700' }, 'Prélèvement Tirelire 🐷✨'),
+            badgeS,
+            el('div', { style: 'font-size:.7rem;color:var(--muted)' }, 'Dispo : ' + sBal + ' pts'))),
+        slider,
+        el('div', { style: 'display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted)' },
+          el('span', {}, '👛 Max Portefeuille'),
+          el('span', {}, '🐷✨ Max Tirelire Magique'))),
+      el('div', { style: 'margin-top:12px;padding:8px 12px;border-radius:10px;background:#f0fdf4;color:var(--green);font-weight:700;text-align:center;font-size:.9rem' },
+        '✓ Total vérifié : ' + r.cost + ' points prélevés'));
 
-    const { close } = modal('Attribuer : ' + r.label, body, []);
-
-    btnConfirm.onclick = async () => {
-      const wp = Number(inputWallet.value) || 0;
-      const sp = Number(inputSavings.value) || 0;
-      if (wp + sp !== r.cost) return;
-      close();
-      await executeRedemption(r, [{ child_id: c.id, wallet_points: wp, savings_points: sp, points: wp + sp }]);
-    };
+    const { close } = modal('Attribuer : ' + r.label, body, [{
+      label: '🎁 Confirmer l’attribution',
+      class: 'btn-primary',
+      onClick: async () => {
+        close();
+        await executeRedemption(r, [{ child_id: c.id, wallet_points: curWallet, savings_points: curSavings, points: r.cost }]);
+      }
+    }]);
 
   } else {
-    // Cas collectif : pour tous les enfants
+    // Cas collectif : pour tous les enfants actifs (Keyran, Rilès, Test, ...)
     const totalCollective = children.reduce((sum, k) => {
       const bo = balances.find(x => x.child_id === k.id) || {};
       return sum + (bo.wallet_balance ?? 0) + (bo.savings_balance ?? 0);
@@ -348,94 +347,168 @@ function openAttributionModal(r) {
       return;
     }
 
-    const kidsInputs = children.map(c => {
+    // Initialisation équitable des parts par enfant (la somme fait exactement r.cost)
+    const n = children.length;
+    let childShares = distributePoints(r.cost, n);
+
+    // Pour chaque enfant, on retient sa part portefeuille et tirelire
+    // Par défaut pour une sortie collective : 100% sur la Tirelire Magique (ou max disponible)
+    const kidsData = children.map((c, i) => {
       const bo = balances.find(x => x.child_id === c.id) || {};
       const wBal = bo.wallet_balance ?? 0;
       const sBal = bo.savings_balance ?? 0;
-      const suggestedPerChild = Math.round(r.cost / children.length);
+      const share = childShares[i];
 
-      // Suggéré en priorité sur la tirelire magique
-      const defSavings = Math.min(suggestedPerChild, sBal);
-      const defWallet = Math.min(suggestedPerChild - defSavings, wBal);
+      const sPts = Math.min(share, sBal);
+      const wPts = share - sPts;
 
-      const inpW = el('input', { type: 'number', min: '0', max: String(wBal), value: String(defWallet), style: 'width:80px' });
-      const inpS = el('input', { type: 'number', min: '0', max: String(sBal), value: String(defSavings), style: 'width:80px' });
-      return { child: c, wBal, sBal, inpW, inpS };
+      return {
+        child: c,
+        wBal, sBal,
+        share,
+        wPts, sPts,
+        // Éléments DOM
+        shareSlider: null,
+        shareBadge: null,
+        walletSlider: null,
+        wBadge: null,
+        sBadge: null
+      };
     });
-
-    const sumBox = el('div', { class: 'card', style: 'background:#f8fafc;margin-top:12px;border:1px solid var(--line);text-align:center' });
-    const btnConfirm = el('button', { class: 'btn btn-primary btn-block', style: 'width:100%;margin-top:14px' }, '🎁 Confirmer la sortie collective');
-
-    const updateCalc = () => {
-      let totalW = 0, totalS = 0;
-      kidsInputs.forEach(k => {
-        totalW += (Number(k.inpW.value) || 0);
-        totalS += (Number(k.inpS.value) || 0);
-      });
-      const grandTotal = totalW + totalS;
-      const ok = (grandTotal === r.cost);
-
-      sumBox.innerHTML = '';
-      if (ok) {
-        sumBox.append(
-          el('div', { style: 'color:var(--green);font-weight:800;font-size:1.05rem' }, '✓ Total collectif réparti : ' + grandTotal + ' / ' + r.cost + ' points'),
-          el('div', { class: 'muted', style: 'font-size:.82rem;margin-top:2px' },
-            'Total Portefeuille : ' + totalW + ' pts · Total Tirelire : ' + totalS + ' pts'));
-        btnConfirm.disabled = false;
-        btnConfirm.classList.remove('btn-ghost');
-        btnConfirm.classList.add('btn-primary');
-      } else {
-        const diff = r.cost - grandTotal;
-        sumBox.append(
-          el('div', { style: 'color:var(--red);font-weight:800;font-size:1.05rem' },
-            'Total réparti : ' + grandTotal + ' / ' + r.cost + ' points'),
-          el('div', { style: 'color:var(--red);font-size:.84rem;margin-top:2px' },
-            diff > 0 ? ('Il manque encore ' + diff + ' point(s) pour couvrir la sortie.') : ('Le total dépasse le prix de ' + Math.abs(diff) + ' point(s).')));
-        btnConfirm.disabled = true;
-        btnConfirm.classList.remove('btn-primary');
-        btnConfirm.classList.add('btn-ghost');
-      }
-    };
-
-    kidsInputs.forEach(k => {
-      k.inpW.addEventListener('input', updateCalc);
-      k.inpS.addEventListener('input', updateCalc);
-    });
-    updateCalc();
 
     const body = el('div', {},
-      el('div', { style: 'padding:10px 12px;background:#f8fafc;border-radius:12px;margin-bottom:12px' },
-        el('strong', { style: 'font-size:1.1rem;display:block' }, r.label),
-        el('span', { class: 'muted', style: 'font-size:.85rem' }, 'Sortie collective · Prix total : ' + r.cost + ' points')),
-      el('p', { class: 'muted', style: 'font-size:.88rem;margin-bottom:12px' },
-        'Définissez pour chaque enfant la part prélevée sur son Portefeuille et sur sa Tirelire Magique :'),
-      el('div', { style: 'display:grid;gap:12px' },
-        ...kidsInputs.map(k => el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff' },
-          el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px' },
-            el('div', { style: 'display:flex;align-items:center;gap:8px' },
-              avatar(k.child.first_name, { size: 'xs', customSrc: k.child.avatar }),
-              el('strong', {}, k.child.first_name)),
-            el('div', { style: 'font-size:.76rem;color:var(--muted)' },
-              '👛 ' + k.wBal + ' pts · 🐷 ' + k.sBal + ' pts')),
-          el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px' },
-            el('div', {}, el('label', { style: 'font-size:.76rem;margin-bottom:2px' }, 'Part Portefeuille 👛'), k.inpW),
-            el('div', {}, el('label', { style: 'font-size:.76rem;margin-bottom:2px' }, 'Part Tirelire 🐷✨'), k.inpS))))),
-      sumBox,
-      btnConfirm);
+      el('div', { style: 'padding:12px;background:#f8fafc;border-radius:12px;margin-bottom:12px' },
+        el('strong', { style: 'font-size:1.15rem;display:block' }, r.label),
+        el('span', { class: 'muted', style: 'font-size:.85rem' },
+          'Sortie collective · Prix total verrouillé : ' + r.cost + ' points')),
+      el('h4', { style: 'margin:14px 0 6px;color:var(--navy)' }, '1. Répartition de la facture entre les enfants :'),
+      el('p', { class: 'muted', style: 'font-size:.82rem;margin:0 0 10px' },
+        'Glissez le curseur d’un enfant pour modifier sa part. La différence se reporte automatiquement et équitablement sur les autres !'),
+      el('div', { id: 'sharesContainer', style: 'display:grid;gap:12px' }),
+      el('h4', { style: 'margin:18px 0 6px;color:#a21caf' }, '2. Prélèvement pour chaque enfant (Portefeuille vs Tirelire) :'),
+      el('p', { class: 'muted', style: 'font-size:.82rem;margin:0 0 10px' },
+        'Par défaut, 100 % de la sortie collective est pris sur la Tirelire Magique 🐷✨. Déplacez le curseur individuel si vous souhaitez utiliser du Portefeuille 👛.'),
+      el('div', { id: 'walletSlidersContainer', style: 'display:grid;gap:12px' }),
+      el('div', { style: 'margin-top:14px;padding:10px 12px;border-radius:10px;background:#f0fdf4;color:var(--green);font-weight:700;text-align:center' },
+        '✓ Facture collective couverte à 100 % (' + r.cost + ' points)'));
 
-    const { close } = modal('Sortie collective : ' + r.label, body, []);
+    const sharesContainer = body.querySelector('#sharesContainer');
+    const walletContainer = body.querySelector('#walletSlidersContainer');
 
-    btnConfirm.onclick = async () => {
-      const shares = kidsInputs.map(k => {
-        const wp = Number(k.inpW.value) || 0;
-        const sp = Number(k.inpS.value) || 0;
-        return { child_id: k.child.id, wallet_points: wp, savings_points: sp, points: wp + sp };
+    // Mettre à jour l'asservissement collectif
+    const updateAllShares = (changedIdx, newVal) => {
+      newVal = Math.max(0, Math.min(r.cost, newVal));
+      childShares[changedIdx] = newVal;
+      const remaining = r.cost - newVal;
+
+      // Répartir le reste sur les autres enfants
+      const otherIndices = Array.from({ length: n }, (_, idx) => idx).filter(idx => idx !== changedIdx);
+      if (otherIndices.length > 0) {
+        const subParts = distributePoints(remaining, otherIndices.length);
+        otherIndices.forEach((otherIdx, j) => {
+          childShares[otherIdx] = subParts[j];
+        });
+      }
+
+      // Synchroniser les sliders de parts et recalculer la ventilation portefeuille/tirelire
+      kidsData.forEach((kd, idx) => {
+        kd.share = childShares[idx];
+        if (kd.shareSlider) kd.shareSlider.value = String(kd.share);
+        if (kd.shareBadge) kd.shareBadge.textContent = kd.share + ' pts';
+
+        // Re-ventiler portefeuille vs tirelire pour sa nouvelle part
+        const defS = Math.min(kd.share, kd.sBal);
+        const defW = Math.max(0, kd.share - defS);
+        kd.sPts = defS;
+        kd.wPts = defW;
+
+        if (kd.walletSlider) {
+          const maxW = Math.min(kd.share, kd.wBal);
+          const minW = Math.max(0, kd.share - kd.sBal);
+          kd.walletSlider.min = String(minW);
+          kd.walletSlider.max = String(maxW);
+          if (kd.wPts < minW) kd.wPts = minW;
+          if (kd.wPts > maxW) kd.wPts = maxW;
+          kd.sPts = kd.share - kd.wPts;
+          kd.walletSlider.value = String(kd.wPts);
+        }
+        if (kd.wBadge) kd.wBadge.textContent = '👛 ' + kd.wPts + ' pts';
+        if (kd.sBadge) kd.sBadge.textContent = '🐷✨ ' + kd.sPts + ' pts';
       });
-      const grandTotal = shares.reduce((s, k) => s + k.points, 0);
-      if (grandTotal !== r.cost) return;
-      close();
-      await executeRedemption(r, shares);
     };
+
+    // Construire le panneau Étape 1 : Part de chaque enfant
+    kidsData.forEach((kd, idx) => {
+      const slider = el('input', {
+        type: 'range', min: '0', max: String(r.cost), step: '1', value: String(kd.share),
+        style: 'width:100%;cursor:pointer'
+      });
+      const badge = el('strong', { style: 'font-size:1.1rem;color:var(--navy)' }, kd.share + ' pts');
+
+      kd.shareSlider = slider;
+      kd.shareBadge = badge;
+
+      slider.addEventListener('input', () => {
+        updateAllShares(idx, Number(slider.value));
+      });
+
+      sharesContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff' },
+        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px' },
+          el('div', { style: 'display:flex;align-items:center;gap:8px' },
+            avatar(kd.child.first_name, { size: 'xs', customSrc: kd.child.avatar }),
+            el('strong', {}, kd.child.first_name)),
+          badge),
+        slider));
+    });
+
+    // Construire le panneau Étape 2 : Choix Portefeuille vs Tirelire par enfant
+    kidsData.forEach((kd) => {
+      const maxW = Math.min(kd.share, kd.wBal);
+      const minW = Math.max(0, kd.share - kd.sBal);
+
+      const wSlider = el('input', {
+        type: 'range', min: String(minW), max: String(maxW), step: '1', value: String(kd.wPts),
+        style: 'width:100%;cursor:pointer;margin:6px 0'
+      });
+
+      const wB = el('span', { style: 'background:#f0f9ff;color:var(--cyan-d);padding:2px 8px;border-radius:6px;border:1px solid #bae6fd;font-weight:700' }, '👛 ' + kd.wPts + ' pts');
+      const sB = el('span', { style: 'background:#fdf4ff;color:#a21caf;padding:2px 8px;border-radius:6px;border:1px solid #f5d0fe;font-weight:700' }, '🐷✨ ' + kd.sPts + ' pts');
+
+      kd.walletSlider = wSlider;
+      kd.wBadge = wB;
+      kd.sBadge = sB;
+
+      wSlider.addEventListener('input', () => {
+        kd.wPts = Number(wSlider.value);
+        kd.sPts = kd.share - kd.wPts;
+        wB.textContent = '👛 ' + kd.wPts + ' pts';
+        sB.textContent = '🐷✨ ' + kd.sPts + ' pts';
+      });
+
+      walletContainer.append(el('div', { style: 'border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff' },
+        el('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px' },
+          el('span', { style: 'font-weight:700' }, kd.child.first_name + ' (part : ' + kd.share + ' pts) :'),
+          el('div', { style: 'display:flex;gap:6px;font-size:.82rem' }, wB, sB)),
+        wSlider,
+        el('div', { style: 'display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted)' },
+          el('span', {}, '👛 Tout Portefeuille'),
+          el('span', {}, '🐷✨ Tout Tirelire Magique'))));
+    });
+
+    const { close } = modal('Sortie collective : ' + r.label, body, [{
+      label: '🎁 Confirmer la sortie collective',
+      class: 'btn-primary',
+      onClick: async () => {
+        close();
+        const shares = kidsData.map(kd => ({
+          child_id: kd.child.id,
+          wallet_points: kd.wPts,
+          savings_points: kd.sPts,
+          points: kd.share
+        }));
+        await executeRedemption(r, shares);
+      }
+    }]);
   }
 }
 
@@ -460,10 +533,9 @@ async function executeRedemption(r, shares) {
 }
 
 // ---------------------------------------------------------------------
-// Section « Récompenses acquises » (Historique riche avec filtres)
+// Section « Récompenses acquises » (Historique riche avec filtres & KPIs)
 // ---------------------------------------------------------------------
 function renderHistorySection(app) {
-  // 1. Filtrage des données
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).toISOString().slice(0, 10);
@@ -494,7 +566,6 @@ function renderHistorySection(app) {
     return true;
   });
 
-  // Calculs KPI pour les cartes synthétiques
   const totalCount = filtered.length;
   let totalPtsWallet = 0;
   let totalPtsSavings = 0;
@@ -503,10 +574,8 @@ function renderHistorySection(app) {
     if (e.wallet_target === 'savings') totalPtsSavings += ptsVal;
     else totalPtsWallet += ptsVal;
   });
-  const totalPtsAll = totalPtsWallet + totalPtsSavings;
 
-  // 2. Composants de filtres UX soignés
-  // Filtre enfants
+  // Filtres enfants
   const childChips = el('div', { class: 'chips', style: 'gap:8px;margin-bottom:10px' },
     el('button', {
       class: 'chip' + (histFilterChild === 'all' ? ' on' : ''),
@@ -546,7 +615,7 @@ function renderHistorySection(app) {
     onchange: e => { histFilterRewardId = e.target.value; render(); }
   }, ...rewardOptions);
 
-  // 3. Carte récapitulative KPI
+  // KPI Header
   const kpiBox = el('div', {
     class: 'card',
     style: 'background:linear-gradient(145deg,#0B2046,#123a74);color:#fff;padding:16px;border-radius:14px;margin-bottom:14px'
@@ -562,7 +631,6 @@ function renderHistorySection(app) {
         el('div', { style: 'font-size:1.6rem;font-weight:900;color:#f0abfc' }, String(totalPtsSavings)),
         el('div', { style: 'font-size:.74rem;opacity:.85;font-weight:600' }, 'Pts Tirelire 🐷'))));
 
-  // 4. Assemblage de la section Historique
   app.append(el('div', { class: 'card' },
     el('h2', {}, 'Historique des récompenses obtenues'),
     el('p', { class: 'muted', style: 'margin-top:-6px' }, 'Explorez les récompenses accordées selon vos critères.'),
@@ -573,7 +641,6 @@ function renderHistorySection(app) {
 
   app.append(kpiBox);
 
-  // Liste des cartes de récompenses
   if (filtered.length === 0) {
     app.append(el('div', { class: 'card', style: 'text-align:center;padding:32px 16px' },
       el('div', { style: 'font-size:2rem;margin-bottom:8px' }, '🔍'),
