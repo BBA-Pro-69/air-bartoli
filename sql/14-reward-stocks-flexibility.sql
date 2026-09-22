@@ -2,9 +2,10 @@
 -- Air Bartoli - Migration 14 : Flexibilité récompenses & équipage complet
 -- 1. Colonnes wallet_points et savings_points dans redemption_shares.
 -- 2. Colonne default_savings_pct dans savings_settings.
--- 3. Fonctions request_redemption et approve_redemption avec répartition par stock.
--- 4. Fonctions create_crew_member (avec auth.identities) et remove_crew_member.
--- 5. Fonction get_crew_login_profiles() pour l'écran de connexion dynamique.
+-- 3. Colonne active dans public.parents (visibilité à la connexion).
+-- 4. Fonctions request_redemption et approve_redemption avec répartition par stock.
+-- 5. Fonctions create_crew_member (avec auth.identities et tokens vides) et remove_crew_member.
+-- 6. Fonction get_crew_login_profiles() pour l'écran de connexion dynamique (active = true).
 -- =====================================================================
 
 begin;
@@ -16,7 +17,10 @@ alter table public.redemption_shares add column if not exists savings_points int
 -- [2] Colonne default_savings_pct dans savings_settings
 alter table public.savings_settings add column if not exists default_savings_pct integer not null default 70 check (default_savings_pct >= 0 and default_savings_pct <= 100);
 
--- [3] Mise à jour de request_redemption pour supporter wallet_points et savings_points
+-- [3] Colonne active dans public.parents
+alter table public.parents add column if not exists active boolean not null default true;
+
+-- [4] Mise à jour de request_redemption pour supporter wallet_points et savings_points
 create or replace function public.request_redemption(p_reward_id uuid, p_shares jsonb)
 returns redemptions
 language plpgsql
@@ -78,7 +82,7 @@ begin
 end;
 $$;
 
--- [4] Mise à jour de approve_redemption
+-- [5] Mise à jour de approve_redemption
 create or replace function public.approve_redemption(p_redemption_id uuid)
 returns redemptions
 language plpgsql
@@ -135,7 +139,7 @@ begin
 end;
 $$;
 
--- [5] Mise à jour de cancel_redemption
+-- [6] Mise à jour de cancel_redemption
 create or replace function public.cancel_redemption(p_redemption_id uuid, p_reason text default null)
 returns redemptions
 language plpgsql
@@ -178,7 +182,7 @@ begin
 end;
 $$;
 
--- [6] Fonction pour l'écran de connexion dynamique
+-- [7] Fonction pour l'écran de connexion dynamique (uniquement les membres actifs)
 create or replace function public.get_crew_login_profiles()
 returns table (
   user_id uuid,
@@ -200,12 +204,13 @@ as $$
     is_admin,
     email
   from parents
+  where active = true
   order by is_admin desc, created_at asc;
 $$;
 
 grant execute on function public.get_crew_login_profiles() to anon, authenticated;
 
--- [7] Fonctions create_crew_member (avec auth.identities) et remove_crew_member
+-- [8] Fonctions create_crew_member (avec auth.identities et tokens vides) et remove_crew_member
 create or replace function public.create_crew_member(
   p_email text,
   p_password text,
@@ -240,10 +245,14 @@ begin
 
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, confirmed_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    phone_change, phone_change_token, email_change_token_current, email_change_confirm_status, reauthentication_token,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at
   ) values (
     '00000000-0000-0000-0000-000000000000', v_user_id, 'authenticated', 'authenticated',
     v_clean_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(), now(),
+    '', '', '', '',
+    '', '', '', 0, '',
     '{"provider":"email","providers":["email"]}'::jsonb,
     jsonb_build_object('display_name', trim(p_display_name)),
     now(), now()
@@ -258,9 +267,9 @@ begin
   );
 
   insert into public.parents (
-    user_id, family_id, display_name, is_admin, role_title, email
+    user_id, family_id, display_name, is_admin, role_title, email, active
   ) values (
-    v_user_id, v_family_id, trim(p_display_name), false, coalesce(p_role_title, 'Membre d''équipage'), v_clean_email
+    v_user_id, v_family_id, trim(p_display_name), false, coalesce(p_role_title, 'Membre d''équipage'), v_clean_email, true
   );
 
   return jsonb_build_object('user_id', v_user_id, 'display_name', p_display_name, 'role_title', p_role_title, 'email', v_clean_email);
@@ -269,6 +278,51 @@ $$;
 
 revoke execute on function public.create_crew_member(text, text, text, text) from anon, public;
 grant execute on function public.create_crew_member(text, text, text, text) to authenticated;
+
+create or replace function public.update_crew_member(
+  p_user_id      uuid,
+  p_display_name text,
+  p_role_title   text default null,
+  p_avatar_url   text default null,
+  p_email        text default null,
+  p_active       boolean default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public', 'auth'
+as $$
+declare
+  v_family_id uuid := auth_family_id();
+  v_is_admin  boolean;
+begin
+  if v_family_id is null then
+    raise exception 'Utilisateur non authentifié.';
+  end if;
+  select is_admin into v_is_admin from parents where user_id = auth.uid();
+  if not coalesce(v_is_admin, false) and p_user_id != auth.uid() then
+    raise exception 'Seuls les administrateurs peuvent modifier les autres membres.';
+  end if;
+
+  if p_user_id = auth.uid() and p_active = false then
+    raise exception 'Impossible de désactiver son propre compte connecté.';
+  end if;
+
+  update public.parents
+  set
+    display_name = coalesce(trim(p_display_name), display_name),
+    role_title   = coalesce(trim(p_role_title), role_title),
+    avatar_url   = case when p_avatar_url is not null then p_avatar_url else avatar_url end,
+    email        = coalesce(lower(trim(p_email)), email),
+    active       = coalesce(p_active, active)
+  where user_id = p_user_id and family_id = v_family_id;
+
+  return true;
+end;
+$$;
+
+revoke execute on function public.update_crew_member(uuid, text, text, text, text, boolean) from anon, public;
+grant execute on function public.update_crew_member(uuid, text, text, text, text, boolean) to authenticated;
 
 create or replace function public.remove_crew_member(p_user_id uuid)
 returns boolean
