@@ -779,12 +779,8 @@ function renderRewardsSection(app) {
         const semaines = flux > 0 ? (Math.round((r.cost / flux) * 10) / 10) : 0;
         const descTemps = '~' + semaines + ' sem.';
 
-        // Historique des attributions
-        const historyList = rewardRedemptions.filter(e => {
-          const mId = e.redemptions?.reward_id === r.id;
-          const mNote = e.note && e.note.includes(r.label);
-          return mId || mNote;
-        });
+        // Historique des attributions (strictement celles approuvées et actives)
+        const historyList = rewardRedemptions.filter(red => red.reward_id === r.id && red.state === 'approved');
         const distCount = historyList.length;
 
         const card = el('div', {
@@ -881,7 +877,20 @@ function openRewardHistoryModal(r, historyList) {
               el('strong', {}, cName),
               el('span', {}, '-' + s.points + ' pts'),
               el('span', { class: 'muted' }, detailPay));
-          }))));
+          })),
+        el('div', { style: 'text-align:right;margin-top:8px' },
+          el('button', {
+            class: 'btn btn-sm btn-ghost',
+            style: 'color:var(--red);font-size:.76rem;padding:2px 8px',
+            onclick: async () => {
+              if (!window.confirm('Annuler cette attribution de « ' + r.label + ' » ?\n\nTous les points prélevés seront immédiatement restitués sur les comptes d’origine.')) return;
+              try {
+                await api.cancelRedemption(red.id, 'Annulation depuis Réglages');
+                await reload();
+                toast('Attribution annulée, points restitués !');
+              } catch (err) { fail(err); }
+            }
+          }, 'Annuler cette attribution'))));
     });
   }
 
