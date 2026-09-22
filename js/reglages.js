@@ -225,30 +225,34 @@ function renderCrewSection(app) {
       el('thead', {}, el('tr', {}, el('th', {}, 'Enfant'), el('th', {}, 'Naissance'),
         el('th', {}, 'Objectif hebdo'), el('th', {}, 'Part Tirelire'), el('th', {}, 'Couleur'), el('th', {}, 'Actions'))),
       el('tbody', {}, ...activeKids.map(c => {
+        const nameInp = el('input', {
+          type: 'text', value: c.first_name || '', required: true,
+          placeholder: 'Prénom', style: 'font-weight:700;width:115px'
+        });
         const b = el('input', { type: 'date', value: c.birth_date || '' });
         const g = el('input', { type: 'number', min: '5', max: '100', value: String(c.weekly_goal || 42) });
         const sav = el('input', { type: 'number', min: '0', max: '100', value: String(c.savings_pct ?? 70), style: 'width:65px' });
         const col = el('input', { type: 'color', value: c.color, style: 'padding:2px;height:40px;width:50px' });
         return el('tr', {},
           el('td', { 'data-th': 'Enfant' },
-            el('button', {
-              type: 'button', class: 'btn btn-sm',
-              style: 'display:inline-flex;align-items:center;gap:8px;padding:4px 10px',
-              title: 'Changer la photo de ' + c.first_name,
-              onclick: () => {
-                openPhotoCropper({
-                  title: 'Photo de ' + c.first_name,
-                  isCircle: true, existingSrc: c.avatar || null,
-                  onSave: async blob => {
-                    const url = await api.uploadMedia(blob, 'child_' + c.id);
-                    await api.update('children', c.id, { avatar: url });
-                    await reload(); toast('Photo de ' + c.first_name + ' mise à jour !');
-                  }
-                });
-              }
-            },
-              avatar(c.first_name, { size: 'xs', customSrc: c.avatar, title: c.first_name }),
-              el('strong', {}, c.first_name))),
+            el('div', { style: 'display:flex;align-items:center;gap:8px' },
+              el('button', {
+                type: 'button', class: 'btn btn-sm',
+                style: 'padding:2px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line)',
+                title: 'Changer la photo de ' + (c.first_name || 'l’enfant'),
+                onclick: () => {
+                  openPhotoCropper({
+                    title: 'Photo de ' + (nameInp.value || c.first_name),
+                    isCircle: true, existingSrc: c.avatar || null,
+                    onSave: async blob => {
+                      const url = await api.uploadMedia(blob, 'child_' + c.id);
+                      await api.update('children', c.id, { avatar: url });
+                      await reload(); toast('Photo mise à jour !');
+                    }
+                  });
+                }
+              }, avatar(c.first_name, { size: 'xs', customSrc: c.avatar, title: c.first_name })),
+              nameInp)),
           el('td', { 'data-th': 'Naissance' }, b),
           el('td', { 'data-th': 'Objectif' }, g),
           el('td', { 'data-th': 'Part Tirelire' }, el('div', { style: 'display:flex;align-items:center;gap:4px' }, sav, el('span', { class: 'muted' }, '%'))),
@@ -258,13 +262,15 @@ function renderCrewSection(app) {
               el('button', {
                 class: 'btn btn-sm btn-primary', onclick: async () => {
                   try {
+                    const newName = nameInp.value.trim();
+                    if (!newName) throw new Error('Le prénom est obligatoire.');
                     await api.save('children', {
-                      id: c.id, family_id: famille, first_name: c.first_name,
+                      id: c.id, family_id: famille, first_name: newName,
                       birth_date: b.value || null, weekly_goal: Number(g.value),
                       savings_pct: Number(sav.value), color: col.value,
                       active: true, sort_order: c.sort_order
                     });
-                    await reload(); toast('Enfant mis à jour.');
+                    await reload(); toast(newName + ' mis à jour.');
                   } catch (e) { fail(e); }
                 }
               }, 'Enregistrer'),
