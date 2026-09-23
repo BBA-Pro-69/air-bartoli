@@ -231,7 +231,9 @@ function rewardCard(r) {
   const savingsPts = bo.savings_balance ?? 0;
   const totalAvailable = walletPts + savingsPts;
   const e = elig.find(x => x.reward_id === r.id && x.child_id === current) || {};
-  const ready = totalAvailable >= r.cost;
+  const isOutOfStock = r.stock !== null && r.stock !== undefined && r.stock <= 0;
+  const isLastOne = r.stock === 1;
+  const ready = totalAvailable >= r.cost && !isOutOfStock;
 
   const card = el('div', {
     class: 'reward' + (ready ? ' ready' : ''),
@@ -239,6 +241,8 @@ function rewardCard(r) {
     onclick: () => openAttributionModal(r)
   },
     r.image_url ? el('img', { src: r.image_url, class: 'reward-img' }) : null,
+    (isOutOfStock ? el('div', { style: 'margin-bottom:6px' }, el('span', { class: 'badge', style: 'background:#fee2e2;color:#991b1b' }, 'Rupture de stock / Épuisé')) : null),
+    (!isOutOfStock && isLastOne ? el('div', { style: 'margin-bottom:6px' }, el('span', { class: 'badge', style: 'background:#fef3c7;color:#b45309' }, '📦 Dernier exemplaire !')) : null),
     el('div', { class: 'reward-top' },
       el('div', {},
         el('strong', {}, r.label),
@@ -252,8 +256,16 @@ function rewardCard(r) {
       type: 'button',
       class: 'btn btn-primary btn-block reward-action-btn',
       style: 'margin-top:12px;width:100%',
-      onclick: ev => { ev.stopPropagation(); openAttributionModal(r); }
-    }, '🎁 Attribuer cette récompense'));
+      disabled: isOutOfStock,
+      onclick: ev => {
+        ev.stopPropagation();
+        if (isOutOfStock) {
+          modal('📦 Récompense épuisée', el('p', { class: 'muted', style: 'text-align:center;padding:12px 0' }, 'Cette récompense est en rupture de stock. Les stocks seront renouvelés prochainement !'), [{ label: 'Compris', class: 'btn-primary', onClick: close => close() }]);
+          return;
+        }
+        openAttributionModal(r);
+      }
+    }, isOutOfStock ? 'Épuisé' : '🎁 Attribuer cette récompense'));
 
   return card;
 }

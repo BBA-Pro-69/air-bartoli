@@ -126,6 +126,30 @@ function formRecompense(r) {
     .map(([v, t]) => el('option', { value: v, selected: (r?.scope || 'individual') === v }, t)));
   const cost = el('input', { type: 'number', min: '1', value: String(r?.cost ?? 20) });
   const minPc = el('input', { type: 'number', min: '0', value: String(r?.min_per_child ?? 0) });
+  const minPcField = champ('Minimum par enfant (collectif)', minPc);
+  const updateScopeVisibility = () => {
+    minPcField.style.display = scope.value === 'collective' ? '' : 'none';
+  };
+  scope.addEventListener('change', updateScopeVisibility);
+  setTimeout(updateScopeVisibility, 0);
+
+  const isLimited = r?.stock !== null && r?.stock !== undefined;
+  const stockSelect = el('select', {},
+    el('option', { value: 'unlimited', selected: !isLimited }, '♾️ Disponibilité illimitée'),
+    el('option', { value: 'limited', selected: isLimited }, '🏬 Quantité limitée en stock'));
+  const stockInp = el('input', {
+    type: 'number', min: '0', value: String(r?.stock ?? 1),
+    placeholder: 'Ex: 1, 3, 10',
+    style: 'width:110px;' + (isLimited ? '' : 'display:none')
+  });
+  const stockField = el('div', { class: 'field' },
+    el('label', {}, 'Gestion du stock'),
+    stockSelect,
+    el('div', { style: 'margin-top:6px' }, stockInp));
+
+  stockSelect.addEventListener('change', () => {
+    stockInp.style.display = stockSelect.value === 'limited' ? '' : 'none';
+  });
   const desc = el('input', { type: 'text', value: r?.description || '' });
   const jauge = el('p', { class: 'muted' });
 
@@ -182,8 +206,9 @@ function formRecompense(r) {
   const body = el('div', {},
     imgPreview,
     champ('Libellé', label),
-    el('div', { class: 'fields' }, champ('Type de récompense', scope), champ('Prix en points', cost),
-      champ('Minimum par enfant (collectif)', minPc)),
+    el('div', { class: 'fields' }, champ('Type de récompense', scope), champ('Prix en points', cost)),
+    minPcField,
+    stockField,
     champ('Description', desc),
     jauge);
 
@@ -195,7 +220,8 @@ function formRecompense(r) {
           family_id: famille, label: label.value.trim(), scope: scope.value,
           cost: Number(cost.value), min_per_child: Number(minPc.value),
           description: desc.value, active: r?.active ?? true, sort_order: r?.sort_order ?? 99,
-          image_url: currentImgUrl
+          image_url: currentImgUrl,
+          stock: stockSelect.value === 'limited' ? Number(stockInp.value) : null
         };
         if (r) row.id = r.id;
         await api.save('rewards', row);
@@ -829,7 +855,14 @@ function renderRewardsSection(app) {
               el('span', {
                 class: 'badge',
                 style: isCollective ? 'background:#fdf4ff;color:#a21caf;font-size:.72rem;margin-top:3px' : 'background:#f0f9ff;color:var(--cyan-d);font-size:.72rem;margin-top:3px'
-              }, isCollective ? '🐷 Tirelire' : '👛 Portefeuille')),
+              }, isCollective ? '🐷 Tirelire' : '👛 Portefeuille'),
+              (r.stock !== null && r.stock !== undefined
+                ? (r.stock <= 0
+                    ? el('span', { class: 'badge', style: 'background:#fee2e2;color:#991b1b;font-size:.72rem;margin-top:3px' }, '🏬 Rupture (0 en stock)')
+                    : (r.stock === 1
+                        ? el('span', { class: 'badge', style: 'background:#fef3c7;color:#b45309;font-size:.72rem;margin-top:3px' }, '🏬 1 en stock (Dernier !)')
+                        : el('span', { class: 'badge', style: 'background:#f1f5f9;color:var(--navy);font-size:.72rem;margin-top:3px' }, '🏬 ' + r.stock + ' en stock')))
+                : el('span', { class: 'badge', style: 'background:#f8fafc;color:var(--muted);font-size:.72rem;margin-top:3px' }, '♾️ Illimitée'))),
             el('span', { style: 'font-size:1.35rem;font-weight:900;color:var(--navy);white-space:nowrap' }, r.cost + ' pts')),
           el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:.82rem' },
             el('span', { class: 'muted', title: 'Temps moyen pour l’obtenir' }, '⏳ ' + descTemps),
