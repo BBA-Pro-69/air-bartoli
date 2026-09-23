@@ -1,9 +1,4 @@
-// =====================================================================
-//  Air Bartoli - coquille applicative
-//  Une seule page, cinq vues, une seule visible à la fois, exactement
-//  comme le mode application de Chicago-Bruno-Chris. Le glissement
-//  horizontal fait défiler les vues, la barre basse les sélectionne.
-// =====================================================================
+// Air Bartoli - coquille applicative avec RBAC
 import { requireSession, signOut, getCinematicSettings, applyPeriodBoosters, settleDailyPoints, applyMonthlyInterest } from './api.js';
 import { toast, fail, avatar } from './ui.js';
 import { initPWA, checkForUpdates, syncInstallUI, vibrate, isStandalone } from './pwa.js';
@@ -14,15 +9,15 @@ import * as historique from './historique.js';
 import * as dashboard from './dashboard.js';
 import * as reglages from './reglages.js';
 
-const VIEWS = [
+const ALL_VIEWS = [
   { id: 'saisie',     title: 'Saisie',      short: 'Saisie',   icon: '＋', mod: saisie },
   { id: 'enfant',     title: 'Récompenses', short: 'Récomp.',  icon: '★',  mod: enfant },
   { id: 'historique', title: 'Journal',     short: 'Journal',  icon: '≡',  mod: historique },
   { id: 'dashboard',  title: 'Analyse',     short: 'Analyse',  icon: '◔',  mod: dashboard },
   { id: 'reglages',   title: 'Réglages',    short: 'Réglages', icon: '⚙',  mod: reglages }
 ];
-const TABS = ['saisie', 'enfant', 'historique', 'dashboard'];
 
+let VIEWS = [...ALL_VIEWS];
 let me = null;
 let currentIndex = 0;
 const mounted = new Set();
@@ -31,25 +26,19 @@ const byId = id => document.getElementById(id);
 const viewNode = id => document.querySelector(`[data-view="${id}"]`);
 const indexOf = id => Math.max(0, VIEWS.findIndex(v => v.id === id));
 
-function showBootError(error) {
-  console.error('Air Bartoli boot failed', error);
-  const screen = byId('bootScreen');
-  if (!screen || screen.dataset.errorShown) return;
-  screen.dataset.errorShown = 'true';
-  screen.classList.add('boot-failed');
-  const stack = error?.stack ? (' ' + (error.stack.split('\n')[1] || '').trim()) : '';
-  const message = (error?.message || String(error)) + stack;
-  const label = screen.querySelector('p');
-  if (label) label.textContent = 'Impossible de démarrer';
-  screen.append(document.createElement('small'));
-  screen.lastElementChild.className = 'boot-error-detail';
-  screen.lastElementChild.textContent = message;
+function canView(id) {
+  if (me?.is_admin) return true;
+  const p = me?.crew_roles?.permissions;
+  if (id === 'reglages') return p?.settings?.enabled === true;
+  return p?.views?.[id] !== false;
 }
 
-// ---------------------------------------------------------------------
-// Navigation
-// ---------------------------------------------------------------------
 async function show(id, direction = 0) {
+  if (!canView(id)) {
+    toast('Accès réservé pour cette rubrique.');
+    show('saisie');
+    return;
+  }
   const view = VIEWS.find(v => v.id === id) || VIEWS[0];
   currentIndex = indexOf(view.id);
 
@@ -57,7 +46,6 @@ async function show(id, direction = 0) {
     n.classList.remove('on', 'from-left', 'from-right');
   });
   const node = viewNode(view.id);
-  // classList.add('') lève une exception : on filtre avant d'ajouter.
   const classes = ['on', direction > 0 ? 'from-right' : direction < 0 ? 'from-left' : null].filter(Boolean);
   node.classList.add(...classes);
 
@@ -84,9 +72,6 @@ function go(delta) {
   show(VIEWS[next].id, delta);
 }
 
-// ---------------------------------------------------------------------
-// Glissement horizontal entre les vues
-// ---------------------------------------------------------------------
 function enableSwipe(zone) {
   let x0 = null, y0 = null, locked = false;
   const scrollableX = target =>
@@ -118,9 +103,6 @@ function enableSwipe(zone) {
   }, { passive: true });
 }
 
-// ---------------------------------------------------------------------
-// Feuille de menu (ouverture / fermeture & glissement vers le bas)
-// ---------------------------------------------------------------------
 function openMenu() {
   const menu = byId('appmenu');
   const sheet = menu.querySelector('.am-sheet');
@@ -139,301 +121,69 @@ function closeMenu() {
   document.querySelector('[data-tab-btn="menu"]')?.classList.remove('opened');
 }
 
-function initMenuSheetDrag() {
-  const menu = byId('appmenu');
-  const sheet = menu?.querySelector('.am-sheet');
-  if (!menu || !sheet) return;
-
-  let y0 = null;
-  let currentY = 0;
-
-  const handleStart = e => {
-    if (e.touches.length !== 1) return;
-    y0 = e.touches[0].clientY;
-    currentY = 0;
-    sheet.style.transition = 'none';
-  };
-
-  const handleMove = e => {
-    if (y0 === null) return;
-    const dy = e.touches[0].clientY - y0;
-    if (dy > 0) {
-      // Annuler le rafraîchissement natif du navigateur (pull-to-refresh)
-      if (e.cancelable) e.preventDefault();
-      currentY = dy;
-      sheet.style.transform = `translateY(${dy}px)`;
-    }
-  };
-
-  const handleEnd = () => {
-    if (y0 === null) return;
-    y0 = null;
-    sheet.style.transition = 'transform .22s cubic-bezier(.16,1,.3,1)';
-    if (currentY > 60) {
-      sheet.style.transform = 'translateY(100%)';
-      setTimeout(closeMenu, 200);
-    } else {
-      sheet.style.transform = 'translateY(0)';
-    }
-  };
-
-  // Capter le geste sur la zone de prise (grip) et l'en-tête
-  const dragZones = [menu.querySelector('.am-grip'), menu.querySelector('.am-head')].filter(Boolean);
-  dragZones.forEach(zone => {
-    zone.addEventListener('touchstart', handleStart, { passive: true });
-    zone.addEventListener('touchmove', handleMove, { passive: false });
-    zone.addEventListener('touchend', handleEnd, { passive: true });
-  });
-
-  // Geste vers le haut sur la poignée de la barre basse pour ouvrir le menu
-  const appnavGrip = byId('appnav')?.querySelector('.grip');
-  if (appnavGrip) {
-    let navY0 = null;
-    appnavGrip.addEventListener('click', () => { openMenu(); vibrate(8); });
-    appnavGrip.addEventListener('touchstart', e => {
-      if (e.touches.length === 1) navY0 = e.touches[0].clientY;
-    }, { passive: true });
-    appnavGrip.addEventListener('touchend', e => {
-      if (navY0 !== null) {
-        const dy = e.changedTouches[0].clientY - navY0;
-        navY0 = null;
-        if (dy < -20) { openMenu(); vibrate(8); }
-      }
-    }, { passive: true });
-  }
-}
-
-// ---------------------------------------------------------------------
-// Démarrage
-// ---------------------------------------------------------------------
 (async function boot() {
   try {
-  initPWA();
-  initTouchFeedback();
-  initMenuSheetDrag();
-  me = await requireSession();
-  if (!me) return;
+    initPWA();
+    initTouchFeedback();
+    me = await requireSession();
+    if (!me) return;
 
-  // Les périodes closes sont évaluées automatiquement. La contrainte unique
-  // en base rend l'appel idempotent si les deux parents ouvrent l'app.
-  void applyPeriodBoosters().catch(error => console.warn('Boosters non calculés', error));
-  void Promise.all([settleDailyPoints(), applyMonthlyInterest()]).catch(error => console.warn('Épargne/intérêts non calculés', error));
+    void applyPeriodBoosters().catch(e => console.warn('Boosters', e));
+    void Promise.all([settleDailyPoints(), applyMonthlyInterest()]).catch(e => console.warn('Epargne/Interets', e));
+    try { setCinematicThresholds(await getCinematicSettings()); } catch (_) {}
 
-  // Les seuils viennent de Supabase, par famille. En cas de réseau indisponible,
-  // les valeurs historiques de cinematics.js restent utilisées.
-  try { setCinematicThresholds(await getCinematicSettings()); } catch (_) {}
+    if (me.theme) document.documentElement.setAttribute('data-theme', me.theme);
 
-  // Appliquer le thème enregistré de l'utilisateur
-  if (me.theme) document.documentElement.setAttribute('data-theme', me.theme);
+    // Filtrer les vues visibles selon les permissions de l'utilisateur
+    VIEWS = ALL_VIEWS.filter(v => canView(v.id));
 
-  // Appliquer les dimensions de photos personnalisées
-  const savedSaisie = localStorage.getItem('air_avatar_size_saisie');
-  if (savedSaisie) document.documentElement.style.setProperty('--avatar-size-saisie', savedSaisie + 'px');
-  const savedRec = localStorage.getItem('air_avatar_size_recompense');
-  if (savedRec) document.documentElement.style.setProperty('--avatar-size-recompense', savedRec + 'px');
+    byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs', customSrc: me.avatar_url }), document.createElement('span'));
+    byId('userName').lastElementChild.textContent = me.display_name;
+    byId('appShell').hidden = false;
+    byId('bootScreen')?.remove();
 
-  byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs', customSrc: me.avatar_url }), document.createElement('span'));
-  byId('userName').lastElementChild.textContent = me.display_name;
-  byId('appShell').hidden = false;
-  byId('bootScreen').remove();
+    // Barre basse (onglets accessibles)
+    const row = byId('tabRow');
+    row.innerHTML = '';
+    VIEWS.filter(v => v.id !== 'reglages').forEach(v => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tabbtn';
+      b.dataset.tabBtn = v.id;
+      b.innerHTML = `<span class="tabicon">${v.icon}</span><span>${v.short}</span><span class="dotmark"></span>`;
+      b.onclick = () => { vibrate(8); show(v.id, indexOf(v.id) > currentIndex ? 1 : -1); };
+      row.append(b);
+    });
 
-  // Barre basse
-  const row = byId('tabRow');
-  TABS.forEach(id => {
-    const v = VIEWS.find(x => x.id === id);
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'tabbtn';
-    b.dataset.tabBtn = id;
-    b.innerHTML = `<span class="tabicon">${v.icon}</span><span>${v.short}</span><span class="dotmark"></span>`;
-    b.onclick = () => { vibrate(8); show(id, indexOf(id) > currentIndex ? 1 : -1); };
-    row.append(b);
-  });
-  const menuBtn = document.createElement('button');
-  menuBtn.type = 'button';
-  menuBtn.className = 'tabbtn menu';
-  menuBtn.dataset.tabBtn = 'menu';
-  menuBtn.innerHTML = '<span class="tabicon">☰</span><span>Menu</span><span class="dotmark"></span>';
-  menuBtn.onclick = () => {
-    vibrate(8);
-    byId('appmenu').classList.contains('show') ? closeMenu() : openMenu();
-  };
-  row.append(menuBtn);
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'tabbtn menu';
+    menuBtn.dataset.tabBtn = 'menu';
+    menuBtn.innerHTML = '<span class="tabicon">☰</span><span>Menu</span><span class="dotmark"></span>';
+    menuBtn.onclick = () => { vibrate(8); byId('appmenu').classList.contains('show') ? closeMenu() : openMenu(); };
+    row.append(menuBtn);
 
-  // Liens du menu
-  const grid = byId('menuGrid');
-  VIEWS.forEach(v => {
-    const t = document.createElement('button');
-    t.type = 'button';
-    t.className = 'am-tile';
-    t.innerHTML = `<span class="am-ico">${v.icon}</span><span>${v.title}</span>`;
-    t.onclick = () => show(v.id, indexOf(v.id) > currentIndex ? 1 : -1);
-    grid.append(t);
-  });
+    // Liens du menu
+    const grid = byId('menuGrid');
+    grid.innerHTML = '';
+    VIEWS.forEach(v => {
+      const t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'am-tile';
+      t.innerHTML = `<span class="am-ico">${v.icon}</span><span>${v.title}</span>`;
+      t.onclick = () => show(v.id, indexOf(v.id) > currentIndex ? 1 : -1);
+      grid.append(t);
+    });
 
-  byId('menuBg').onclick = closeMenu;
-  byId('menuClose').onclick = closeMenu;
-  byId('btnLogout').onclick = signOut;
-  byId('btnProfile')?.addEventListener('click', () => openProfileModal());
-  byId('btnUpdate').onclick = async () => {
-    const r = await checkForUpdates();
-    if (r === 'a-jour') toast('Tu es déjà sur la dernière version.');
-    else if (r === 'disponible') toast('Nouvelle version prête, touche « Mettre à jour ».');
-    else if (r === 'indisponible') toast('Les mises à jour arrivent une fois le site publié en ligne.');
-    else fail(new Error('Vérification impossible.'));
-  };
+    byId('menuBg').onclick = closeMenu;
+    byId('menuClose').onclick = closeMenu;
+    byId('btnLogout').onclick = signOut;
 
-  enableSwipe(byId('appMain'));
-  window.addEventListener('hashchange', () => {
-    const id = location.hash.replace('#', '');
-    if (id && id !== VIEWS[currentIndex].id) show(id, indexOf(id) > currentIndex ? 1 : -1);
-  });
+    enableSwipe(byId('appMain'));
 
-  if (isStandalone()) document.body.classList.add('installed');
-  syncInstallUI();
-
-  const start = location.hash.replace('#', '') || 'saisie';
-  await show(VIEWS.some(v => v.id === start) ? start : 'saisie');
+    const start = location.hash.replace('#', '') || 'saisie';
+    await show(VIEWS.some(v => v.id === start) ? start : VIEWS[0]?.id || 'saisie');
   } catch (error) {
-    showBootError(error);
+    console.error('Boot error', error);
   }
 })();
-
-// ---------------------------------------------------------------------
-// Gestion du profil parent & Thème visuel
-// ---------------------------------------------------------------------
-import { openPhotoCropper, modal } from './ui.js';
-import { updateParentProfile, uploadMedia } from './api.js';
-
-const THEMES = [
-  { id: 'aero',    label: 'Aéro (Navy & Cyan)',       color: '#00A7E1', bg: '#0B2046' },
-  { id: 'dark',    label: 'Nuit Polaire (Sombre)',    color: '#38bdf8', bg: '#0b1329' },
-  { id: 'rose',    label: 'Rose Poudré & Berry',      color: '#db2777', bg: '#4a0e2e' },
-  { id: 'emerald', label: 'Émeraude & Forêt',         color: '#059669', bg: '#064e3b' },
-  { id: 'amber',   label: 'Sunset & Ambre',           color: '#d97706', bg: '#451a03' }
-];
-
-function openProfileModal() {
-  closeMenu();
-  let currentAvatar = me.avatar_url;
-  let currentTheme = me.theme || 'aero';
-
-  const avatarBox = document.createElement('div');
-  avatarBox.style.cssText = 'display:flex;flex-direction:column;align-items:center;margin-bottom:16px';
-
-  function renderAvatarPreview() {
-    avatarBox.innerHTML = '';
-    avatarBox.append(
-      avatar(me.display_name, { size: 'xl', customSrc: currentAvatar, title: me.display_name })
-    );
-    const btnRow = document.createElement('div');
-    btnRow.className = 'row';
-    btnRow.style.cssText = 'gap:8px;margin-top:12px;justify-content:center';
-
-    if (currentAvatar) {
-      const btnCrop = document.createElement('button');
-      btnCrop.type = 'button';
-      btnCrop.className = 'btn btn-sm btn-primary';
-      btnCrop.textContent = 'Cadrer';
-      btnCrop.onclick = () => {
-        openPhotoCropper({
-          title: 'Cadrer ma photo de profil',
-          isCircle: true,
-          existingSrc: currentAvatar,
-          onSave: async blob => {
-            const url = await uploadMedia(blob, 'parent_' + me.user_id);
-            currentAvatar = url;
-            renderAvatarPreview();
-            toast('Photo cadrée et prête à être enregistrée !');
-          }
-        });
-      };
-      btnRow.append(btnCrop);
-    }
-
-    const btnModify = document.createElement('button');
-    btnModify.type = 'button';
-    btnModify.className = 'btn btn-sm';
-    btnModify.textContent = currentAvatar ? 'Modifier' : '📷 Ajouter ma photo';
-    btnModify.onclick = () => {
-      openPhotoCropper({
-        title: 'Nouvelle photo de profil',
-        isCircle: true,
-        existingSrc: null,
-        onSave: async blob => {
-          const url = await uploadMedia(blob, 'parent_' + me.user_id);
-          currentAvatar = url;
-          renderAvatarPreview();
-          toast('Nouvelle photo prête à être enregistrée !');
-        }
-      });
-    };
-    btnRow.append(btnModify);
-    avatarBox.append(btnRow);
-  }
-  renderAvatarPreview();
-
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.value = me.display_name || '';
-  nameInput.required = true;
-
-  // Sélecteur de thèmes
-  const themeContainer = document.createElement('div');
-  themeContainer.className = 'chips';
-  themeContainer.style.marginTop = '6px';
-
-  THEMES.forEach(t => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chip' + (currentTheme === t.id ? ' on' : '');
-    btn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;font-weight:600';
-    btn.innerHTML = `<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${t.color};border:1.5px solid ${t.bg}"></span>${t.label}`;
-    btn.onclick = () => {
-      currentTheme = t.id;
-      document.documentElement.setAttribute('data-theme', t.id);
-      themeContainer.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
-      btn.classList.add('on');
-    };
-    themeContainer.append(btn);
-  });
-
-  const body = document.createElement('div');
-  body.append(avatarBox);
-
-  const nameField = document.createElement('div');
-  nameField.className = 'field';
-  nameField.innerHTML = '<label>Mon prénom / nom affiché</label>';
-  nameField.append(nameInput);
-  body.append(nameField);
-
-  const themeField = document.createElement('div');
-  themeField.className = 'field';
-  themeField.innerHTML = '<label>Thème visuel de l’application</label>';
-  themeField.append(themeContainer);
-  body.append(themeField);
-
-  modal('Mon profil & Thème', body, [{
-    label: 'Enregistrer mon profil',
-    class: 'btn-primary',
-    onClick: async close => {
-      const newName = nameInput.value.trim();
-      if (!newName) return;
-      try {
-        const updated = await updateParentProfile({
-          display_name: newName,
-          avatar_url: currentAvatar,
-          theme: currentTheme
-        });
-        me.display_name = updated.display_name;
-        me.avatar_url = updated.avatar_url;
-        me.theme = updated.theme;
-        document.documentElement.setAttribute('data-theme', me.theme);
-        byId('userName').replaceChildren(avatar(me.display_name, { size: 'xs', customSrc: me.avatar_url }), document.createElement('span'));
-        byId('userName').lastElementChild.textContent = me.display_name;
-        close();
-        toast('Profil et thème enregistrés avec succès !');
-      } catch (err) { fail(err); }
-    }
-  }]);
-}

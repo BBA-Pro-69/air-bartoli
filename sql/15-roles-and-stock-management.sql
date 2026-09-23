@@ -1,5 +1,5 @@
 -- =====================================================================
--- Air Bartoli - Migration 15 : Roles et permissions equipage + stock recompenses
+-- Air Bartoli - Migration 15 : Roles, permissions fines et gestion stock
 -- =====================================================================
 
 begin;
@@ -9,13 +9,7 @@ create table if not exists public.crew_roles (
   family_id uuid not null references public.families(id) on delete cascade,
   name text not null,
   is_admin boolean not null default false,
-  can_view_settings boolean not null default false,
-  can_edit_crew boolean not null default false,
-  can_edit_bareme boolean not null default false,
-  can_edit_savings boolean not null default false,
-  can_edit_rewards boolean not null default false,
-  can_give_rewards boolean not null default true,
-  can_add_malus boolean not null default true,
+  permissions jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
