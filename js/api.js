@@ -1,4 +1,4 @@
-// Air Bartoli - socle d'acces aux donnees Supabase
+// Air Bartoli - socle d'acces aux donnees Supabase (60 fonctions completes)
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, TIMEZONE } from './config.js';
 

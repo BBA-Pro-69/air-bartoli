@@ -2,121 +2,60 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0B2046">
-<meta name="robots" content="noindex,nofollow">
+<title>Air Bartoli · Keyrilès</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="./manifest.webmanifest?v=2026-09-23i">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-180.png?v=2026-09-23i">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png?v=2026-09-23i">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Keyrilès">
-<title>Air Bartoli · Keyrilès</title>
-<link rel="manifest" href="./manifest.webmanifest?v=2026-09-23e">
-<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-180.png?v=2026-09-23e">
-<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png?v=2026-09-23e">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=2026-09-23e">
-<link rel="stylesheet" href="css/avatars.css?v=2026-09-23e">
+<link rel="stylesheet" href="css/app.css?v=2026-09-23i">
+<link rel="stylesheet" href="css/avatars.css?v=2026-09-23i">
 </head>
 <body>
-
-<div id="bootScreen" class="boot"><span class="boot-mark">✈</span><p>Air Bartoli…</p></div>
-
-<div id="appShell" hidden>
-
-  <!-- Bandeau d'installation, masqué 7 jours si on le ferme -->
-  <div id="installBanner" class="install-banner">
-    <span class="ib-ico">📲</span>
-    <p id="installTxt"></p>
-    <button type="button" id="installGo" class="ib-go">Installer</button>
-    <button type="button" id="installClose" class="ib-close" aria-label="Masquer">×</button>
-  </div>
-
+<div class="pwa-install-banner" id="pwaBanner" hidden>
+  <span class="pwa-lead">📲 Installe Keyrilès pour l’ouvrir comme une vraie application, même hors connexion.</span>
+  <button class="btn btn-sm btn-primary" id="btnPwaInstall">Installer</button>
+  <button class="btn btn-sm btn-ghost" id="btnPwaDismiss" aria-label="Fermer">✕</button>
+</div>
+<div class="boot" id="bootScreen"><div class="boot-spinner"></div></div>
+<div class="app-shell" id="appShell" hidden>
   <header class="appbar">
-    <span class="brand-mark">✈</span>
-    <div class="appbar-titles">
-      <span class="appbar-app">Air Bartoli</span>
-      <strong id="viewTitle">Saisie</strong>
+    <div class="appbar-title">
+      <span class="appbar-ico">✈</span>
+      <span>Air Bartoli</span>
+      <span class="appbar-sep">·</span>
+      <span class="appbar-page" id="viewTitle">Saisie</span>
     </div>
-    <button type="button" class="appbar-install" data-install hidden>Installer</button>
-    <button type="button" class="appbar-user" id="userName" onclick="document.getElementById('appmenu').classList.add('show')">…</button>
+    <div class="appbar-user" id="userName"></div>
   </header>
-
   <main class="app-main" id="appMain">
     <section class="view" data-view="saisie"></section>
     <section class="view" data-view="enfant"></section>
     <section class="view" data-view="historique"></section>
     <section class="view" data-view="dashboard"></section>
     <section class="view" data-view="reglages"></section>
-    <p class="swipe-hint">← glisse pour changer d’écran →</p>
   </main>
-
-  <!-- Barre basse, zone du pouce -->
-  <nav id="appnav" aria-label="Navigation">
-    <div class="grip"><span></span></div>
+  <nav class="tabbar" id="tabBar">
     <div class="row" id="tabRow"></div>
   </nav>
-
-  <!-- Feuille « toutes les rubriques » -->
-  <div id="appmenu">
+  <div class="am" id="appmenu">
     <div class="am-bg" id="menuBg"></div>
     <div class="am-sheet">
-      <div class="am-grip"><span></span></div>
-      <div class="am-head">
-        <strong>Air Bartoli · Keyrilès</strong>
-        <button type="button" class="btn btn-sm" id="menuClose">Fermer</button>
-      </div>
-      <div class="am-scroll">
-        <div class="am-fam"><span>Écrans</span><span class="line"></span></div>
-        <div class="am-grid" id="menuGrid"></div>
-        <div class="am-fam"><span>Application</span><span class="line"></span></div>
-        <button type="button" class="am-install" data-install hidden>
-          <span class="lead">📲</span> Installer l’application <span class="go">›</span>
-        </button>
-        <button type="button" class="am-install ghost" id="btnProfile">
-          <span class="lead">👤</span> Mon profil & Thème <span class="go">›</span>
-        </button>
-        <button type="button" class="am-install ghost" id="btnUpdate">
-          <span class="lead">⟳</span> Rechercher une mise à jour <span class="go">›</span>
-        </button>
-        <button type="button" class="am-logout" id="btnLogout">Se déconnecter</button>
-      </div>
+      <div class="am-handle"></div>
+      <div class="am-grid" id="menuGrid"></div>
+      <button class="btn btn-block btn-ghost" id="btnLogout" style="margin-top:14px;color:var(--red)">Déconnexion</button>
+      <button class="btn btn-block" id="menuClose" style="margin-top:8px">Fermer</button>
     </div>
   </div>
-
-  <!-- Bandeau de mise à jour -->
-  <div id="swBanner">
-    <div class="sw-box">
-      <div>
-        <strong>Nouvelle version disponible</strong>
-        <span>Recharge pour obtenir la dernière évolution.</span>
-      </div>
-      <button type="button" id="swGo" class="sw-go">Mettre à jour</button>
-      <button type="button" id="swLater" class="sw-later" aria-label="Plus tard">×</button>
-    </div>
-  </div>
-
 </div>
-
-<script>
-(() => {
-  const show = (error, event) => {
-    const screen = document.getElementById('bootScreen');
-    if (!screen || screen.dataset.errorShown) return;
-    screen.dataset.errorShown = 'true';
-    screen.classList.add('boot-failed');
-    const label = screen.querySelector('p');
-    if (label) label.textContent = 'Impossible de démarrer';
-    const detail = document.createElement('small');
-    detail.className = 'boot-error-detail';
-    const loc = event && event.filename ? (' [' + event.filename.split('/').pop() + ':' + event.lineno + ']') : '';
-    detail.textContent = (error?.message || String(error || event?.message || 'Erreur inconnue')) + loc;
-    screen.append(detail);
-  };
-  window.addEventListener('error', event => show(event.error || event.message, event));
-  window.addEventListener('unhandledrejection', event => show(event.reason, null));
-})();
-</script>
-<script type="module" src="js/app.js?v=2026-09-23e"></script>
+<div id="toastBox" class="toast-box"></div>
+<div id="undoBox" class="undo-box"></div>
+<script type="module" src="js/app.js?v=2026-09-23i"></script>
 </body>
 </html>

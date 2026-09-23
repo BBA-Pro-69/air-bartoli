@@ -29,7 +29,7 @@ const indexOf = id => Math.max(0, VIEWS.findIndex(v => v.id === id));
 function canView(id) {
   if (me?.is_admin) return true;
   const p = me?.crew_roles?.permissions;
-  if (id === 'reglages') return p?.settings?.enabled === true;
+  if (id === 'reglages') return me?.crew_roles?.can_view_settings === true || p?.settings?.enabled === true;
   return p?.views?.[id] !== false;
 }
 
