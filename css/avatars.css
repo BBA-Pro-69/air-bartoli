@@ -1,65 +1,14 @@
-/* =====================================================================
-   Air Bartoli - avatars de la famille
-   Ce fichier ne fait que l'habillage des elements produits par
-   avatar() et personLabel() dans js/ui.js. Les tailles sont aussi
-   posees en attributs width/height cote JavaScript, ce qui evite tout
-   decalage de mise en page pendant le chargement des images.
-   ===================================================================== */
-.person-avatar{display:inline-block;flex:none;max-width:100%;border-radius:50%;
-  object-fit:cover;background:#0b2046;border:2px solid rgba(255,255,255,.65);
-  box-shadow:0 2px 6px rgba(9,18,40,.22)}
-.person-avatar-xs{width:24px;height:24px;border-width:1.5px}
-.person-avatar-sm{width:36px;height:36px;border-width:2px}
-.person-avatar-md{width:50px;height:50px;border-width:2.5px;box-shadow:0 3px 8px rgba(9,18,40,.25)}
-.person-avatar-lg{width:70px;height:70px;border-width:3px;box-shadow:0 6px 16px rgba(9,18,40,.3)}
-.person-avatar-xl{width:90px;height:90px;border-width:3.5px;box-shadow:0 8px 22px rgba(9,18,40,.35)}
-
-.person-label{display:inline-flex;align-items:center;gap:7px;min-width:0;
-  max-width:100%;vertical-align:middle}
-.person-label > span{min-width:0;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap}
-
-/* Saisie rapide */
-.kid-name .person-label{justify-content:center}
-
-/* Selecteurs d'enfant */
-.chip .person-label{gap:6px}
-.chip .person-avatar{border-width:1.5px}
-
-/* Bandeau de l'ecran Enfants */
-.hero-person{display:flex;align-items:center;margin-bottom:10px}
-.hero-person .person-label{gap:12px;font-size:1.05rem;font-weight:800}
-.hero-person .person-avatar{border-color:rgba(255,255,255,.85)}
-
-/* Journal */
-.journal-filter-btn .person-label{gap:6px}
-.journal-day-score .person-avatar{width:13px;height:13px;border-width:1px;
-  box-shadow:none}
-.journal-summary-top .person-label,
-.journal-modal-summary .person-label{gap:7px}
-.entry > .person-avatar{margin-top:2px;border-color:rgba(148,163,184,.55)}
-
-/* Analyse */
-.legend-person{display:inline-flex;align-items:center;gap:6px}
-
-/* Parent connecte, barre du haut */
-#userName{display:inline-flex;align-items:center;gap:6px}
-#userName .person-avatar{border-color:rgba(255,255,255,.55)}
-
-/* Connexion */
-.who button{display:flex;align-items:center;justify-content:center;gap:10px}
-.who button .person-label{font-weight:700}
-
-@media (max-width:760px){
-  #userName{max-width:9rem}
-  #userName > span:last-child{overflow:hidden;text-overflow:ellipsis;
-    white-space:nowrap}
-  .journal-day-score .person-avatar{width:11px;height:11px}
-  .hero-person .person-label{font-size:.98rem}
+/* Styles des avatars, curseurs fluides, halo dore et mode sombre soigné */
+.avatar-cropper-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 32, 70, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
 }
-
-
-/* Curseurs fluides bord a bord sans decalage parasite */
 .app-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -106,4 +55,87 @@
   border: 2px solid #fff;
   box-shadow: 0 1px 5px rgba(0,0,0,0.3);
   cursor: pointer;
+}
+
+/* Halo doré scintillant pour les cartes de récompenses prêtes à 100% */
+.reward.ready {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.42), 0 0 32px rgba(245, 158, 11, 0.22) !important;
+  animation: golden-glow 2s infinite alternate ease-in-out;
+}
+@keyframes golden-glow {
+  0% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.35); }
+  100% { box-shadow: 0 0 24px rgba(245, 158, 11, 0.72), 0 0 40px rgba(254, 240, 138, 0.45); }
+}
+
+/* Mode sombre soigné avec contraste absolu */
+[data-theme="dark"] {
+  --navy: #1e3a8a;
+  --cyan: #38bdf8;
+  --cyan-d: #7dd3fc;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+  --line: #334155;
+  --bg: #0b1528;
+  --card: #13223d;
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] body {
+  background: var(--bg);
+  color: var(--ink);
+}
+[data-theme="dark"] .card,
+[data-theme="dark"] .entry,
+[data-theme="dark"] .reward,
+[data-theme="dark"] .tile,
+[data-theme="dark"] .modal-box {
+  background: var(--card) !important;
+  border-color: var(--line) !important;
+  color: var(--ink) !important;
+}
+[data-theme="dark"] .btn {
+  background: #1e293b;
+  border-color: var(--line);
+  color: #f8fafc;
+}
+[data-theme="dark"] .btn-primary {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #0b1528;
+  font-weight: 800;
+}
+[data-theme="dark"] .chip {
+  background: #1e293b;
+  border-color: var(--line);
+  color: #e2e8f0;
+}
+[data-theme="dark"] .chip.on {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #0b1528;
+}
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #0f172a !important;
+  border-color: var(--line) !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] strong,
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4 {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .muted {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .badge {
+  background: #1e293b !important;
+  color: #93c5fd !important;
+  border: 1px solid #334155;
 }

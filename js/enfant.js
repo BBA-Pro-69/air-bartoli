@@ -157,14 +157,14 @@ function render() {
         el('div', { style: 'font-size:1.4rem;font-weight:900;color:#fff' }, String(walletPts)),
         el('div', { style: 'font-size:.76rem;color:rgba(255,255,255,.95);font-weight:700' }, 'Portefeuille'),
         el('div', { style: 'font-size:.66rem;color:rgba(255,255,255,.75)' }, 'dépenses libres')),
-      el('div', { style: 'background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 6px;text-align:center' },
-        el('div', { style: 'font-size:1.3rem' }, '🐷✨'),
-        el('div', { style: 'font-size:1.4rem;font-weight:900;color:#fff' }, String(savingsPts)),
-        el('div', { style: 'font-size:.76rem;color:rgba(255,255,255,.95);font-weight:700' }, 'Tirelire Magique'),
-        el('div', { style: 'font-size:.66rem;color:rgba(255,255,255,.75)' }, 'grands projets & +intérêts'))),
+      el('div', { style: 'background:linear-gradient(135deg,rgba(251,191,36,.25),rgba(245,158,11,.15));border:1.5px solid rgba(251,191,36,.55);border-radius:14px;padding:10px 6px;text-align:center;box-shadow:0 0 12px rgba(245,158,11,.2)' },
+        el('div', { style: 'font-size:1.4rem;animation:pop .4s' }, '🐷✨'),
+        el('div', { style: 'font-size:1.45rem;font-weight:900;color:#fef08a' }, String(savingsPts)),
+        el('div', { style: 'font-size:.76rem;color:#fef08a;font-weight:800;letter-spacing:.02em' }, 'Tirelire Magique'),
+        el('div', { style: 'font-size:.66rem;color:rgba(254,240,138,.85)' }, 'Coffre aux trésors & +intérêts'))),
     (todayPending > 0
       ? el('div', { style: 'margin-top:12px;display:inline-flex;align-items:center;gap:6px;background:rgba(0,167,225,.3);border:1px solid rgba(0,167,225,.5);padding:4px 12px;border-radius:999px;font-size:.76rem;color:#fff;font-weight:700' },
-          '✈️ +' + todayPending + ' pt' + (todayPending > 1 ? 's' : '') + ' en cours de vol (versés cette nuit à minuit)')
+          '✈️ +' + todayPending + ' pt' + (todayPending > 1 ? 's' : '') + ' en plein vol (atterrissent dans le coffre pendant la nuit)')
       : null)));
 
   // Séparateur avec titre centré
@@ -386,8 +386,11 @@ function openAttributionModal(r) {
           el('strong', { style: 'font-size:1.15rem;display:block' }, r.label),
           el('span', { class: 'muted', style: 'font-size:.85rem' },
             'Pour ' + c.first_name + ' · Prix exact : ' + r.cost + ' points'))),
-      el('p', { class: 'muted', style: 'font-size:.88rem;margin:0 0 10px' },
-        'Glissez le curseur ou saisissez les montants directement : les deux stocks s’ajustent automatiquement pour faire exactement ' + r.cost + ' points.'),
+      r.image_url ? el('img', { src: r.image_url, style: 'width:100%;height:140px;border-radius:12px;object-fit:cover;margin-bottom:12px;border:1px solid var(--line)' }) : null,
+      el('div', { style: 'display:flex;gap:8px;margin-bottom:10px' },
+        el('button', { type: 'button', class: 'btn btn-sm btn-ghost', style: 'flex:1;border:1px solid #bae6fd;background:#f0f9ff;color:var(--cyan-d);font-weight:700', onclick: () => syncFromWallet(maxW) }, '👛 Tout Portefeuille'),
+        el('button', { type: 'button', class: 'btn btn-sm btn-ghost', style: 'flex:1;border:1px solid #f5d0fe;background:#fdf4ff;color:#a21caf;font-weight:700', onclick: () => syncFromSavings(sBal) }, '🐷✨ Tout Tirelire')),
+      el('p', { class: 'muted', style: 'font-size:.85rem;margin:0 0 8px' }, 'Glissez le curseur ou saisissez les montants : les deux stocks s’ajustent automatiquement.'),
       el('div', { class: 'card', style: 'padding:14px;background:#fff;border:1px solid var(--line);border-radius:12px' },
         el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;margin-bottom:8px' },
           el('div', { style: 'background:#f0f9ff;border:1px solid #bae6fd;padding:10px 8px;border-radius:10px' },

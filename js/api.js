@@ -10,12 +10,12 @@ export const PARENTS = [
 ];
 
 export const DAY_PARTS = [
-  { code: 'matin',  label: 'Matin',  from: 0,  to: 9  },
-  { code: 'ecole',  label: 'École',  from: 9,  to: 12 },
-  { code: 'midi',   label: 'Midi',   from: 12, to: 15 },
-  { code: 'gouter', label: 'Goûter', from: 15, to: 18 },
-  { code: 'soir',   label: 'Soir',   from: 18, to: 22 },
-  { code: 'nuit',   label: 'Nuit',   from: 22, to: 24 }
+  { code: 'matin',  label: 'Matin 🌅',  from: 0,  to: 9  },
+  { code: 'ecole',  label: 'École 🎒',  from: 9,  to: 12 },
+  { code: 'midi',   label: 'Midi 🍽️',   from: 12, to: 15 },
+  { code: 'gouter', label: 'Goûter 🍎', from: 15, to: 18 },
+  { code: 'soir',   label: 'Soir 🌙',   from: 18, to: 22 },
+  { code: 'nuit',   label: 'Nuit 🛌',   from: 22, to: 24 }
 ];
 
 export function todayISO() {
