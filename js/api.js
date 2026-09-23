@@ -134,6 +134,8 @@ export const updateCrewMember = (userId, displayName, roleTitle = null, avatarUr
 export const removeCrewMember = (userId) => rpc('remove_crew_member', { p_user_id: userId });
 export const archiveChild = (id) => update('children', id, { active: false });
 export const restoreChild = (id) => update('children', id, { active: true });
+export const saveCrewRole = role => save('crew_roles', role);
+export const deleteCrewRole = roleId => sb.from('crew_roles').delete().eq('id', roleId);
 
 export async function save(table, row) {
   const { data, error } = await sb.from(table).upsert(row).select();
@@ -161,4 +163,16 @@ export async function uploadMedia(fileBlob, folder = 'avatars', fileName = null)
   if (error) throw error;
   const { data: pub } = sb.storage.from('avatars').getPublicUrl(name);
   return pub.publicUrl;
+}
+
+export async function updateParentProfile({ display_name, avatar_url, theme }) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error('Non connecté.');
+  const updates = {};
+  if (display_name !== undefined) updates.display_name = display_name;
+  if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+  if (theme !== undefined) updates.theme = theme;
+  const { data, error } = await sb.from('parents').update(updates).eq('user_id', session.user.id).select().single();
+  if (error) throw error;
+  return data;
 }
