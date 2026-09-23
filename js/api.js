@@ -78,12 +78,14 @@ const rows = async (q) => { const { data, error } = await q; if (error) throw er
 export const getChildren   = () => rows(sb.from('children').select('*').eq('active', true).order('sort_order'));
 export const getAllChildren = () => rows(sb.from('children').select('*').order('sort_order'));
 export const getCategories = () => rows(sb.from('categories').select('*').eq('active', true).order('sort_order'));
+export const getCategoriesForHistory = () => rows(sb.from('categories').select('*').order('sort_order'));
 export const getRewards    = () => rows(sb.from('rewards').select('*').order('cost'));
 export const getBalances   = () => rows(sb.from('v_child_balance').select('*'));
 export const getLevels     = () => rows(sb.from('v_child_level').select('*'));
 export const getRates      = () => rows(sb.from('v_child_rate').select('*'));
 export const getEligibility= () => rows(sb.from('v_reward_eligibility').select('*'));
 export const getBoosterSettings = () => rows(sb.from('booster_settings').select('*').order('period_type'));
+export const getStatusLevels=() => rows(sb.from('status_levels').select('*').order('min_points'));
 export const getSpecialDays= () => rows(sb.from('special_days').select('*').order('day', { ascending: false }));
 export const getContexts   = () => rows(sb.from('custom_contexts').select('*').eq('active', true).order('sort_order'));
 export const getParents    = () => rows(sb.from('parents').select('*, crew_roles(*)').order('created_at'));
@@ -97,12 +99,33 @@ export async function getCinematicSettings() {
 export const getSavingsSettings = () => sb.from('savings_settings').select('*').maybeSingle().then(r => r.data || { annual_interest_rate: 100.00, default_savings_pct: 70, active: true });
 
 export const getDaily      = (since) => rows(sb.from('v_daily').select('*').gte('event_date', since).order('event_date'));
+export const getProfile    = () => rows(sb.from('v_category_profile').select('*'));
+
 export const getEvents = (limit = 120) => rows(
   sb.from('events')
     .select('*, categories(label, parent_id, repairable), children(first_name, color, avatar)')
     .order('event_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit));
+
+export const getDailyRange = (from, to) => rows(
+  sb.from('v_daily').select('*').gte('event_date', from).lte('event_date', to)
+    .order('event_date').order('child_id'));
+
+export const getEventsRange = (from, to, childId = null) => {
+  let q = sb.from('events')
+    .select('*, categories(label, parent_id, repairable), children(first_name, color, avatar)')
+    .gte('event_date', from).lte('event_date', to)
+    .order('event_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (childId) q = q.eq('child_id', childId);
+  return rows(q);
+};
+
+export const getPendingRedemptions = () => rows(
+  sb.from('redemptions')
+    .select('*, rewards(label, scope, cost, min_per_child), redemption_shares(child_id, points)')
+    .eq('state', 'requested').order('requested_at'));
 
 export const getRedemptionsHistory = () => rows(
   sb.from('redemptions')
