@@ -3,6 +3,14 @@
 À tenir à jour à chaque livraison. Une ligne par version, la plus récente en
 haut.
 
+## 3 octobre 2026 : calcul net des boosters calendaires (L56)
+
+- Migration `17-fix-booster-net-calculation.sql` :
+  - `apply_period_boosters` : les jours qualifiants (`v_days`) sont désormais calculés sur le **score net journalier** (`day_net = gains - malus`), et non sur les gains bruts isolés. Un jour où le net est inférieur au seuil quotidien n'est plus qualifiant.
+  - Le total de la période (`v_total`) est désormais évalué en points nets (après déduction des malus).
+  - La note de l'événement généré indique explicitement le nombre réel de jours qualifiants et le minimum requis : `Booster hebdomadaire : X jours qualifiants à au moins Y pt(s) (min. Z), N pts nets au total`.
+  - Données historiques du 27 septembre 2026 régularisées : Keyran validait bien la règle (6 jours réels >= 2 pts pour un minimum de 5 requis, et 40 pts nets pour 18 requis).
+
 ## 2 octobre 2026 : scores journaliers négatifs autorisés et plancher global à zéro (L55)
 
 - Migration `16-allow-negative-daily-score.sql` :
