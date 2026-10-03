@@ -65,7 +65,8 @@ function dayStats(childId, date) {
     lost: Math.abs(lost),
     spent: Math.abs(spent),
     net: Number(d?.net || 0),
-    score: Math.max(0, behaviorNet),
+    score: behaviorNet,
+    countedScore: Math.max(0, behaviorNet),
     entries: Number(d?.entries || 0)
   };
 }
@@ -195,10 +196,12 @@ function renderCalendar() {
     if (!day) return el('div', { class: 'journal-day blank', 'aria-hidden': 'true' });
     const rows = dailyMapFor(day).map(({ child: c, stats }) => {
       const has = stats.entries > 0;
-      const cls = 'journal-day-score ' + (has ? (stats.score > 0 ? 'positive' : 'zero') : 'empty');
-      return el('div', { class: cls, title: c.first_name + ' : ' + stats.score + ' point' + (stats.score > 1 ? 's' : '') },
+      const isNeg = stats.score < 0;
+      const cls = 'journal-day-score ' + (has ? (stats.score > 0 ? 'positive' : (isNeg ? 'negative' : 'zero')) : 'empty');
+      const titleStr = c.first_name + ' : ' + (stats.score > 0 ? '+' : '') + stats.score + ' point' + (Math.abs(stats.score) > 1 ? 's' : '') + (isNeg ? ' (comptabilisé : 0 pt)' : '');
+      return el('div', { class: cls, title: titleStr },
         avatar(c.first_name, { size: 'xs', title: c.first_name }),
-        el('strong', {}, has ? String(stats.score) : '·'));
+        el('strong', {}, has ? (stats.score > 0 ? '+' + stats.score : String(stats.score)) : '·'));
     });
     const isToday = day === api.todayISO();
     const isSelected = day === selectedDay;
@@ -217,7 +220,7 @@ function renderCalendar() {
     el('div', { class: 'journal-weekdays' }, ...weekNames.map(x => el('span', {}, x))),
     el('div', { class: 'journal-grid' }, ...cells),
     el('div', { class: 'journal-legend' },
-      el('span', {}, 'Score du jour, jamais inférieur à 0'),
+      el('span', {}, 'Score du jour (solde global jamais inférieur à 0)'),
       el('span', {}, '· = rien saisi')));
 }
 
@@ -417,10 +420,15 @@ function openDay(day) {
   const list = events.filter(e => e.event_date === day && (!filter || e.child_id === filter));
   const flags = eventFlags(events);
   const body = el('div', {},
-    el('div', { class: 'journal-modal-summaries' }, ...rows.map(({ child: c, stats }) =>
-      el('div', { class: 'journal-modal-summary', style: `--kid:${c.color}` },
-        avatar(c.first_name, { size: 'sm', customSrc: c.avatar, title: c.first_name }), el('b', {}, stats.score + ' pts'),
-        el('span', {}, '+' + stats.gained + ' · −' + stats.lost + (stats.spent ? ' · dépensé ' + stats.spent : ''))))),
+    el('div', { class: 'journal-modal-summaries' }, ...rows.map(({ child: c, stats }) => {
+      const isNeg = stats.score < 0;
+      return el('div', { class: 'journal-modal-summary' + (isNeg ? ' negative' : ''), style: `--kid:${c.color}` },
+        avatar(c.first_name, { size: 'sm', customSrc: c.avatar, title: c.first_name }),
+        el('div', { style: 'display:flex;flex-direction:column;gap:2px' },
+          el('b', {}, (stats.score > 0 ? '+' : '') + stats.score + ' pt' + (Math.abs(stats.score) > 1 ? 's' : '')),
+          isNeg ? el('span', { class: 'muted', style: 'font-size:.76rem;font-weight:600' }, '(comptabilisé : 0 pt)') : null),
+        el('span', {}, '+' + stats.gained + ' · −' + stats.lost + (stats.spent ? ' · dépensé ' + stats.spent : '')));
+    })),
     list.length ? el('div', { class: 'journal-events' }, ...list.map(e => entry(e, flags.reversed.has(e.id), flags.repaired.has(e.id))))
       : el('p', { class: 'muted' }, 'Aucune écriture cette journée.'));
   modal(dayLabel(day), body, []);

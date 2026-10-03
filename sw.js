@@ -1,5 +1,5 @@
 // Service Worker Air Bartoli - Cache versionne
-const VERSION = '2026-09-23j';
+const VERSION = '2026-10-02a';
 const CACHE_NAME = 'air-bartoli-' + VERSION;
 
 const SHELL = [

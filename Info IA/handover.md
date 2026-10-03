@@ -35,12 +35,15 @@ Imposé par le trigger `categories_depth_guard`. Raison : ergonomie de saisie à
 une main sur téléphone, et lisibilité des analyses. `v_category_profile`
 suppose cette profondeur (une jointure sur le parent, pas une récursion).
 
-### 1.5 Écrêtage à zéro plutôt que solde négatif
-Un enfant à −12 points ne joue plus. Quand le malus dépasse le solde,
-`add_event` réduit le montant, et si le solde est déjà nul l'écriture est
-enregistrée **à zéro point** avec une mention dans la note. Cette écriture à
-zéro est volontaire : elle garde le comportement visible dans l'analyse alors
-qu'il n'a aucun effet comptable.
+### 1.5 Journée négative autorisée mais solde global sanctuarisé à zéro
+Au sein d'une même journée, l'enfant peut descendre dans le négatif (ex: -2, -4, -6 points)
+et ce résultat de la journée est fidèlement affiché (en rouge dans la saisie et le calendrier).
+Si des bonus surviennent plus tard dans la même journée (ex: +10), ils viennent combler
+ces malus (-6 + 10 = +4 points).
+En revanche, **le compteur global acquis ne descend jamais en dessous de zéro** :
+à la clôture journalière (`settle_daily_points`), si le score de la journée est négatif,
+il est comptabilisé à 0 pt pour le Portefeuille et la Tirelire. Les malus d'un jour
+n'entament jamais les points acquis des jours précédents.
 
 ### 1.6 Le multiplicateur ne s'applique qu'aux gains
 Codé en dur dans `add_event`. Un jour spécial qui double aussi les punitions

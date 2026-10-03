@@ -89,15 +89,19 @@ function renderDayScoreHeader() {
   state.children.forEach(c => {
     const stats = computeDayStats(c.id);
     const isSelected = state.child === c.id;
+    const isNeg = stats.net < 0;
     container.append(el('div', {
-      class: 'day-score-badge' + (isSelected ? ' active' : ''),
+      class: 'day-score-badge' + (isSelected ? ' active' : '') + (isNeg ? ' is-negative' : ''),
       style: `--kid:${c.color};cursor:pointer`,
       onclick: () => { state.child = c.id; renderGlobalScores(); renderDayScoreHeader(); renderDayTiles(); renderDayHistory(); }
     },
       avatar(c.first_name, { size: 'xs', customSrc: c.avatar, title: c.first_name }),
       el('span', { class: 'name', style: 'font-weight:600;font-size:.9rem;color:var(--ink)' }, c.first_name),
-      el('strong', { class: stats.net >= 0 ? 'pos' : 'neg', style: 'font-size:.98rem;margin-left:2px' },
-        (stats.net > 0 ? '+' : '') + stats.net + ' pt' + (Math.abs(stats.net) > 1 ? 's' : ''))));
+      el('div', { style: 'display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1' },
+        el('strong', { class: stats.net >= 0 ? 'pos' : 'neg', style: 'font-size:.98rem;margin-left:2px' },
+          (stats.net > 0 ? '+' : '') + stats.net + ' pt' + (Math.abs(stats.net) > 1 ? 's' : '')),
+        isNeg ? el('span', { class: 'muted', style: 'font-size:.66rem;font-weight:700;color:var(--muted);margin-left:2px' }, '(comptabilisé : 0 pt)') : null
+      )));
   });
 }
 
@@ -301,11 +305,7 @@ async function write(cat, points, note, context = null, forceKind = null, repair
     celebrate(ev.points, origin, cat.label);
     await refresh();
 
-    if (ev.points === 0 && (forceKind === 'malus' || cat.kind === 'malus')) {
-      toast(kidObj.first_name + ' est déjà à 0 : rien retiré, mais c\'est noté.', 'ok', 5000);
-    } else {
-      toast(kidObj.first_name + ' · ' + cat.label + ' · ' + pts(ev.points));
-    }
+    toast(kidObj.first_name + ' · ' + cat.label + ' · ' + pts(ev.points));
 
     undoBar(cat.label + ' ' + pts(ev.points), async () => {
       try {

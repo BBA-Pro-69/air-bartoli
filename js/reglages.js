@@ -58,12 +58,15 @@ const roots = () => cats.filter(c => !c.parent_id);
 // ---------------------------------------------------------------------
 function formCategorie(cat, parentId) {
   const isSub = !!(cat ? cat.parent_id : parentId);
+  const parentCat = parentId ? cats.find(c => c.id === parentId) : (cat?.parent_id ? cats.find(c => c.id === cat.parent_id) : null);
+  const parentIsProblem = parentCat && /probl[èe]me/i.test(parentCat.label);
+  const defaultSubKind = parentIsProblem ? 'malus' : (parentCat?.kind === 'malus' ? 'malus' : 'bonus');
   const label = el('input', { type: 'text', value: cat?.label || '', required: true });
   const kind = el('select', {},
     ...[['bonus', 'Bonus, on gagne des points'],
         ['malus', 'Malus, on en perd'],
         ['both', 'Les deux (catégorie chapeau)']]
-      .map(([v, t]) => el('option', { value: v, selected: (cat?.kind || (isSub ? 'bonus' : 'both')) === v }, t)));
+      .map(([v, t]) => el('option', { value: v, selected: (cat?.kind || (isSub ? defaultSubKind : 'both')) === v }, t)));
   const points = el('input', { type: 'number', min: '0', max: '50', value: String(cat?.default_points ?? 2) });
   const maxDay = el('input', { type: 'number', min: '1', max: '10', value: cat?.max_per_day ?? '', placeholder: 'illimité' });
   const rep = el('input', { type: 'checkbox', style: 'width:auto;min-height:auto', checked: cat?.repairable || false });

@@ -541,6 +541,8 @@ body.menu-open{overflow:hidden}
 .journal-day-score{display:flex;align-items:center;gap:4px;min-width:0;font-size:.72rem;color:var(--muted)}
 .journal-day-score strong{font-size:.8rem;color:var(--ink)}
 .journal-day-score.positive strong{color:var(--cyan-d)}
+.journal-day-score.negative strong{color:var(--red)}
+.journal-modal-summary.negative b{color:var(--red)}
 .journal-day-score.empty{opacity:.48}
 .journal-day-initial{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;color:#fff;font-size:.6rem;font-weight:800;flex:none}
 .journal-legend{display:flex;justify-content:space-between;gap:10px;margin-top:10px;color:var(--muted);font-size:.72rem}

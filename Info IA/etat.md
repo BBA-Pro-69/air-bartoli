@@ -3,6 +3,19 @@
 À tenir à jour à chaque livraison. Une ligne par version, la plus récente en
 haut.
 
+## 2 octobre 2026 : scores journaliers négatifs autorisés et plancher global à zéro (L55)
+
+- Migration `16-allow-negative-daily-score.sql` :
+  - `add_event` : suppression de l'écrêtage à 0 lors de la saisie d'un malus. L'enfant peut descendre dans le négatif au sein d'une même journée.
+  - `daily_settlements` : suppression du check positif sur `day_score` pour refléter le score exact du jour. `wallet_points` et `savings_points` restent >= 0 (0 point crédité sur le compteur global si journée négative).
+  - `v_daily` : expose `daily_score` (comportement réel du jour, peut être négatif) et `counted_score` (score comptabilisé sur le compteur global avec plancher à 0).
+- Front-end :
+  - `js/saisie.js` : affichage du score net négatif (ex: -4 pts) avec libellé clair `(comptabilisé : 0 pt)`. Retrait du message déroutant "est déjà à 0 : rien retiré".
+  - `js/historique.js` : calendrier mensuel avec affichage des scores réels négatifs en rouge (`.negative`) et modale détaillée avec mention explicite du score comptabilisé à 0.
+  - `js/reglages.js` : présélection intelligente de `malus` par défaut lors de la création d'une sous-catégorie sous "Problèmes".
+  - `css/app.css` : styles pour `.journal-day-score.negative` et `.journal-modal-summary.negative`.
+  - Cache PWA incrémenté à `2026-10-02a` dans `sw.js` et `index.html`.
+
 ## v1 — base de données en service (17 septembre 2026)
 
 **Projet Supabase dédié**, créé pour ce seul usage :
