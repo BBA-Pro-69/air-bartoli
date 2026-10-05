@@ -3,6 +3,17 @@
 À tenir à jour à chaque livraison. Une ligne par version, la plus récente en
 haut.
 
+## 4 octobre 2026 : dissociation stricte Portefeuille (individuel) vs Tirelire (collectif) (L57)
+
+- Vue SQL `v_reward_eligibility` (Migration 18) :
+  - Pour les récompenses individuelles : jauge et temps d'attente calculés sur `wallet_balance` et sur le rythme net d'alimentation du Portefeuille (`100 - savings_pct`).
+  - Pour les récompenses collectives : temps d'attente et seuils calculés sur `savings_balance` et sur le rythme net d'alimentation de la Tirelire (`savings_pct`).
+- Front-end (`js/enfant.js`) :
+  - Récompenses individuelles : la jauge et l'état prêt sont désormais basés **exclusivement sur le Portefeuille (dépenses libres)**. La Tirelire Magique n'est plus sommée sur la carte.
+  - Récompenses collectives : la jauge et l'état prêt sont désormais basés **exclusivement sur la Tirelire Magique collective**. Les portefeuilles ne sont plus sommés sur la carte.
+  - Correction de variable dans la modale d'attribution (`maxW` -> `maxWallet`) et message explicatif si un complément sur tirelire est requis pour un achat individuel.
+  - Cache PWA incrémenté à `2026-10-04a` dans `sw.js` et `index.html`.
+
 ## 3 octobre 2026 : calcul net des boosters calendaires (L56)
 
 - Migration `17-fix-booster-net-calculation.sql` :

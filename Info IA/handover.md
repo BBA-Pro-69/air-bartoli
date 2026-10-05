@@ -61,6 +61,11 @@ Décision produit, pas technique. Aucune vue ne compare les enfants entre eux
 sauf la cagnotte collective. Si on demande un classement, refuser et proposer
 la comparaison de chaque enfant à sa propre moyenne sur 28 jours.
 
+### 1.9 Dissociation stricte Portefeuille (individuel) vs Tirelire (collectif)
+Dans l'écran Enfants et le catalogue de récompenses :
+- Les **récompenses individuelles** affichent leur jauge et leur état « Prêt » exclusivement à partir du solde du **Portefeuille** (`wallet_balance`). La Tirelire Magique n'y contribue pas.
+- Les **récompenses collectives** affichent leur jauge et leur état « Prêt » exclusivement à partir du solde de la **Tirelire Magique** (`savings_balance`). Le Portefeuille n'y contribue pas.
+
 ## 2. Anatomie de la base
 
 ```

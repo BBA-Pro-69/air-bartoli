@@ -228,12 +228,10 @@ function renderCatalogSection(app) {
 function rewardCard(r) {
   const bo = balances.find(x => x.child_id === current) || {};
   const walletPts = bo.wallet_balance ?? 0;
-  const savingsPts = bo.savings_balance ?? 0;
-  const totalAvailable = walletPts + savingsPts;
   const e = elig.find(x => x.reward_id === r.id && x.child_id === current) || {};
   const isOutOfStock = r.stock !== null && r.stock !== undefined && r.stock <= 0;
   const isLastOne = r.stock === 1;
-  const ready = totalAvailable >= r.cost && !isOutOfStock;
+  const ready = walletPts >= r.cost && !isOutOfStock;
 
   const card = el('div', {
     class: 'reward' + (ready ? ' ready' : ''),
@@ -246,12 +244,12 @@ function rewardCard(r) {
     el('div', { class: 'reward-top' },
       el('div', {},
         el('strong', {}, r.label),
-        el('div', { style: 'font-size:.74rem;color:var(--cyan-d);font-weight:700;margin-top:2px' }, '👛 Portefeuille (ou Tirelire)')),
+        el('div', { style: 'font-size:.74rem;color:var(--cyan-d);font-weight:700;margin-top:2px' }, '👛 Portefeuille uniquement')),
       el('span', { class: 'reward-cost' }, r.cost + ' pts')),
-    el('div', { style: 'margin:10px 0 6px' }, gauge(totalAvailable, r.cost, kid(current).color)),
+    el('div', { style: 'margin:10px 0 6px' }, gauge(walletPts, r.cost, kid(current).color)),
     el('div', { class: 'eta' }, ready
-      ? el('strong', { style: 'color:var(--green)' }, '✓ Points suffisants ! Prêt à être attribué.')
-      : el('span', {}, 'Il manque ', el('strong', {}, (r.cost - totalAvailable) + ' points'), ', ', etaText(e.days_left))),
+      ? el('strong', { style: 'color:var(--green)' }, '✓ Portefeuille suffisant (' + walletPts + ' / ' + r.cost + ' pts) ! Prêt à être attribué.')
+      : el('span', {}, 'Il manque ', el('strong', {}, (r.cost - walletPts) + ' pts dans le portefeuille'), ', ', etaText(e.days_left))),
     el('button', {
       type: 'button',
       class: 'btn btn-primary btn-block reward-action-btn',
@@ -271,11 +269,11 @@ function rewardCard(r) {
 }
 
 function collectiveCard(r) {
-  const totalAvailable = children.reduce((sum, c) => {
+  const totalSavings = children.reduce((sum, c) => {
     const bo = balances.find(x => x.child_id === c.id) || {};
-    return sum + (bo.wallet_balance ?? 0) + (bo.savings_balance ?? 0);
+    return sum + (bo.savings_balance ?? 0);
   }, 0);
-  const ready = totalAvailable >= r.cost;
+  const ready = totalSavings >= r.cost;
 
   const card = el('div', {
     class: 'reward' + (ready ? ' ready' : ''),
@@ -286,10 +284,12 @@ function collectiveCard(r) {
     el('div', { class: 'reward-top' },
       el('div', {},
         el('strong', {}, r.label),
-        el('div', { style: 'font-size:.74rem;color:#a21caf;font-weight:700;margin-top:2px' }, '🐷 Tirelire Magique (ou Portefeuille)')),
+        el('div', { style: 'font-size:.74rem;color:#a21caf;font-weight:700;margin-top:2px' }, '🐷 Tirelire Magique uniquement')),
       el('span', { class: 'reward-cost' }, r.cost + ' pts')),
-    el('div', { style: 'margin:10px 0 6px' }, gauge(totalAvailable, r.cost, '#a21caf')),
-    el('div', { class: 'eta' }, 'Cagnotte disponible : ', el('strong', {}, totalAvailable + ' / ' + r.cost + ' pts')),
+    el('div', { style: 'margin:10px 0 6px' }, gauge(totalSavings, r.cost, '#a21caf')),
+    el('div', { class: 'eta' }, ready
+      ? el('strong', { style: 'color:var(--green)' }, '✓ Tirelire Magique suffisante (' + totalSavings + ' / ' + r.cost + ' pts) ! Prête pour la sortie.')
+      : el('span', {}, 'Tirelire disponible : ', el('strong', {}, totalSavings + ' / ' + r.cost + ' pts'), ' (manque ' + (r.cost - totalSavings) + ' pts)')),
     el('button', {
       type: 'button',
       class: 'btn btn-primary btn-block reward-action-btn',
@@ -387,8 +387,9 @@ function openAttributionModal(r) {
           el('span', { class: 'muted', style: 'font-size:.85rem' },
             'Pour ' + c.first_name + ' · Prix exact : ' + r.cost + ' points'))),
       r.image_url ? el('img', { src: r.image_url, style: 'width:100%;height:140px;border-radius:12px;object-fit:cover;margin-bottom:12px;border:1px solid var(--line)' }) : null,
+      (wBal < r.cost ? el('div', { class: 'card', style: 'background:#fffbeb;border-color:#fde68a;padding:8px 12px;margin-bottom:10px;font-size:.82rem;color:#92400e;text-align:center' }, '💡 Portefeuille : ' + wBal + ' / ' + r.cost + ' pts. Le complément (' + (r.cost - wBal) + ' pts) est prélevé sur la Tirelire.') : null),
       el('div', { style: 'display:flex;gap:8px;margin-bottom:10px' },
-        el('button', { type: 'button', class: 'btn btn-sm btn-ghost', style: 'flex:1;border:1px solid #bae6fd;background:#f0f9ff;color:var(--cyan-d);font-weight:700', onclick: () => syncFromWallet(maxW) }, '👛 Tout Portefeuille'),
+        el('button', { type: 'button', class: 'btn btn-sm btn-ghost', style: 'flex:1;border:1px solid #bae6fd;background:#f0f9ff;color:var(--cyan-d);font-weight:700', onclick: () => syncFromWallet(maxWallet) }, '👛 Tout Portefeuille'),
         el('button', { type: 'button', class: 'btn btn-sm btn-ghost', style: 'flex:1;border:1px solid #f5d0fe;background:#fdf4ff;color:#a21caf;font-weight:700', onclick: () => syncFromSavings(sBal) }, '🐷✨ Tout Tirelire')),
       el('p', { class: 'muted', style: 'font-size:.85rem;margin:0 0 8px' }, 'Glissez le curseur ou saisissez les montants : les deux stocks s’ajustent automatiquement.'),
       el('div', { class: 'card', style: 'padding:14px;background:#fff;border:1px solid var(--line);border-radius:12px' },
